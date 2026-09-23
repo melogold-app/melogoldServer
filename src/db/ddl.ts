@@ -157,11 +157,35 @@ export const COLUMN_TYPES: ColumnTypes = Object.freeze({
 // ---------------------------------------------------------------------------------------------------------------------
 
 export type ModelColumn = Readonly<{ name: string; type: LogicalType; nullable: boolean; hasDefault: boolean }>;
-export type ModelIndex = Readonly<{ name: string; table: string }>;
-export type ModelTable = { readonly name: string; readonly columns: ModelColumn[]; readonly indexes: string[] };
+/** A `CREATE INDEX` (constraint indexes of `PRIMARY KEY` and `UNIQUE` are not indexes of the model). */
+export type ModelIndex = Readonly<{
+  name: string;
+  table: string;
+  columns: readonly string[];
+  unique: boolean;
+  /** The partial-index predicate as written in the migration. */
+  where: string | null;
+}>;
+export type ModelForeignKey = Readonly<{
+  columns: readonly string[];
+  table: string;
+  references: readonly string[];
+  onDelete: OnDelete | null;
+}>;
+export type ModelTable = {
+  readonly name: string;
+  readonly columns: ModelColumn[];
+  readonly primaryKey: readonly string[];
+  /** `UNIQUE` constraints (column `.unique()` and `options.unique`), columns in order. */
+  readonly unique: (readonly string[])[];
+  readonly foreignKeys: ModelForeignKey[];
+  /** `CHECK` expressions as written, including the generated `<col> IN (0,1)` of `BOOL`. */
+  readonly checks: string[];
+  readonly indexes: ModelIndex[];
+};
 
 export type SchemaModel = {
-  /** Tables in creation order. */
+  /** Tables in creation order, with their constraints and indexes. */
   readonly tables: Map<string, ModelTable>;
   readonly indexes: Map<string, ModelIndex>;
 };
@@ -350,6 +374,17 @@ export function ddl(dialect: SqlDialect): Ddl {
     return text;
   }
 
+  /** The `CHECK` expressions a column renders, in rendering order. */
+  function columnChecks(name: string, spec: ColumnSpec): string[] {
+    return [...(spec.type === "BOOL" ? [`${name} IN (0,1)`] : []), ...spec.checks];
+  }
+
+  function columnForeignKey(name: string, spec: ColumnSpec): ModelForeignKey | null {
+    if (!spec.references) return null;
+    const { table, column, onDelete } = spec.references;
+    return Object.freeze({ columns: [name], table, references: [column], onDelete });
+  }
+
   function toModelColumn(name: string, spec: ColumnSpec): ModelColumn {
     return Object.freeze({
       name,
@@ -427,10 +462,32 @@ export function ddl(dialect: SqlDialect): Ddl {
 
     const body = lines.map((line) => `  ${line}`).join(",\n");
     const columns = entries.map(([column, builder]) => toModelColumn(column, builder.spec));
+    const table: ModelTable = {
+      name,
+      columns,
+      primaryKey: Object.freeze([...(options.primaryKey ?? inlinePrimaryKeys)]),
+      unique: [
+        ...entries.filter(([, builder]) => builder.spec.unique).map(([column]) => Object.freeze([column])),
+        ...(options.unique ?? []).map((unique) => Object.freeze([...unique])),
+      ],
+      foreignKeys: [
+        ...entries.flatMap(([column, builder]) => columnForeignKey(column, builder.spec) ?? []),
+        ...(options.foreignKeys ?? []).map((foreignKey) =>
+          Object.freeze({
+            columns: [...foreignKey.columns],
+            table: foreignKey.table,
+            references: [...foreignKey.references],
+            onDelete: foreignKey.onDelete ?? null,
+          }),
+        ),
+      ],
+      checks: entries.flatMap(([column, builder]) => columnChecks(column, builder.spec)),
+      indexes: [],
+    };
     return Object.freeze({
       sql: `CREATE TABLE ${name} (\n${body}\n)${dialect === "sqlite" ? " STRICT" : ""}`,
       apply() {
-        model.tables.set(name, { name, columns, indexes: [] });
+        model.tables.set(name, table);
       },
     });
   }
@@ -453,11 +510,18 @@ export function ddl(dialect: SqlDialect): Ddl {
       assertPortableExpression(options.where, tableColumns, `index ${name} WHERE`);
       text += ` WHERE ${options.where}`;
     }
+    const index: ModelIndex = Object.freeze({
+      name,
+      table,
+      columns: Object.freeze([...columns]),
+      unique: options.unique === true,
+      where: options.where ?? null,
+    });
     return Object.freeze({
       sql: text,
       apply() {
-        model.indexes.set(name, { name, table });
-        model.tables.get(table)?.indexes.push(name);
+        model.indexes.set(name, index);
+        model.tables.get(table)?.indexes.push(index);
       },
     });
   }
@@ -479,10 +543,15 @@ export function ddl(dialect: SqlDialect): Ddl {
     if (tableModel?.columns.some((column) => column.name === name)) throw new DdlError(`${where} already exists`);
     const columns = tableModel ? new Set([...tableModel.columns.map((column) => column.name), name]) : "any";
     const column = toModelColumn(name, spec);
+    const foreignKey = columnForeignKey(name, spec);
     return Object.freeze({
       sql: `ALTER TABLE ${table} ADD COLUMN ${name} ${renderColumn(table, name, spec, columns)}`,
       apply() {
-        model.tables.get(table)?.columns.push(column);
+        const target = model.tables.get(table);
+        if (!target) return;
+        target.columns.push(column);
+        target.checks.push(...columnChecks(name, spec));
+        if (foreignKey) target.foreignKeys.push(foreignKey);
       },
     });
   }

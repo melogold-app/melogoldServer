@@ -7,6 +7,10 @@
         { "name": "key", "type": "ID", "nullable": false },
         { "name": "value", "type": "TXT", "nullable": false }
       ],
+      "primaryKey": ["key"],
+      "unique": [],
+      "foreignKeys": [],
+      "checks": [],
       "indexes": []
     },
     "users": {
@@ -24,7 +28,13 @@
         { "name": "created_at", "type": "TS", "nullable": false },
         { "name": "updated_at", "type": "TS", "nullable": false }
       ],
-      "indexes": ["users_deleted"]
+      "primaryKey": ["id"],
+      "unique": [["login"]],
+      "foreignKeys": [],
+      "checks": ["length(login) BETWEEN 3 AND 64", "length(recovery_code_hash) = 64"],
+      "indexes": [
+        { "name": "users_deleted", "columns": ["deleted_at"], "unique": false, "where": "deleted_at IS NOT NULL" }
+      ]
     },
     "devices": {
       "columns": [
@@ -43,7 +53,16 @@
         { "name": "last_seen_at", "type": "TS", "nullable": false },
         { "name": "last_sync_at", "type": "TS", "nullable": true }
       ],
-      "indexes": ["devices_last_seen"]
+      "primaryKey": ["id"],
+      "unique": [["user_id", "hwid_hash"]],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": [
+        "length(hwid_hash) = 64",
+        "length(reported_name) BETWEEN 1 AND 64",
+        "custom_name IS NULL OR length(custom_name) BETWEEN 1 AND 64",
+        "length(platform) BETWEEN 1 AND 16"
+      ],
+      "indexes": [{ "name": "devices_last_seen", "columns": ["last_seen_at"], "unique": false, "where": null }]
     },
     "refresh_tokens": {
       "columns": [
@@ -58,7 +77,18 @@
         { "name": "confirmed_at", "type": "TS", "nullable": true },
         { "name": "created_at", "type": "TS", "nullable": false }
       ],
-      "indexes": ["refresh_tokens_user", "refresh_tokens_device", "refresh_tokens_expires"]
+      "primaryKey": ["id"],
+      "unique": [["token_hash"]],
+      "foreignKeys": [
+        { "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" },
+        { "columns": ["device_id"], "table": "devices", "references": ["id"], "onDelete": "CASCADE" }
+      ],
+      "checks": [],
+      "indexes": [
+        { "name": "refresh_tokens_user", "columns": ["user_id"], "unique": false, "where": null },
+        { "name": "refresh_tokens_device", "columns": ["device_id"], "unique": false, "where": null },
+        { "name": "refresh_tokens_expires", "columns": ["expires_at"], "unique": false, "where": null }
+      ]
     },
     "auth_throttle": {
       "columns": [
@@ -69,6 +99,10 @@
         { "name": "locked_until", "type": "TS", "nullable": true },
         { "name": "updated_at", "type": "TS", "nullable": false }
       ],
+      "primaryKey": ["scope", "key_hash"],
+      "unique": [],
+      "foreignKeys": [],
+      "checks": [],
       "indexes": []
     },
     "device_links": {
@@ -99,7 +133,19 @@
         { "name": "decided_at", "type": "TS", "nullable": true },
         { "name": "completed_at", "type": "TS", "nullable": true }
       ],
-      "indexes": ["device_links_expires", "device_links_user", "device_links_approver", "device_links_net"]
+      "primaryKey": ["id"],
+      "unique": [["token_hash"], ["code_hash"], ["poll_secret_hash"]],
+      "foreignKeys": [
+        { "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" },
+        { "columns": ["approver_device_id"], "table": "devices", "references": ["id"], "onDelete": "SET NULL" }
+      ],
+      "checks": ["verify_code IS NULL OR length(verify_code) = 2"],
+      "indexes": [
+        { "name": "device_links_expires", "columns": ["expires_at"], "unique": false, "where": null },
+        { "name": "device_links_user", "columns": ["user_id"], "unique": false, "where": null },
+        { "name": "device_links_approver", "columns": ["approver_device_id"], "unique": false, "where": null },
+        { "name": "device_links_net", "columns": ["creator_net"], "unique": false, "where": "creator_net IS NOT NULL" }
+      ]
     },
     "sync_heads": {
       "columns": [
@@ -109,6 +155,10 @@
         { "name": "floor_seq", "type": "BIG", "nullable": false },
         { "name": "updated_at", "type": "TS", "nullable": false }
       ],
+      "primaryKey": ["user_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(epoch) = 8"],
       "indexes": []
     },
     "sync_ops": {
@@ -129,7 +179,14 @@
         { "name": "pre_image", "type": "JSON", "nullable": true },
         { "name": "server_at", "type": "TS", "nullable": false }
       ],
-      "indexes": ["sync_ops_op", "sync_ops_server_at"]
+      "primaryKey": ["user_id", "seq"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(kind) BETWEEN 1 AND 64"],
+      "indexes": [
+        { "name": "sync_ops_op", "columns": ["user_id", "op_id"], "unique": true, "where": null },
+        { "name": "sync_ops_server_at", "columns": ["server_at"], "unique": false, "where": null }
+      ]
     },
     "sync_tracks": {
       "columns": [
@@ -149,7 +206,11 @@
         { "name": "seq", "type": "BIG", "nullable": false },
         { "name": "updated_at", "type": "TS", "nullable": false }
       ],
-      "indexes": ["sync_tracks_pull"]
+      "primaryKey": ["user_id", "video_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(video_id) = 11", "explicit IN (0,1)", "stub IN (0,1)"],
+      "indexes": [{ "name": "sync_tracks_pull", "columns": ["user_id", "seq"], "unique": false, "where": null }]
     },
     "sync_likes": {
       "columns": [
@@ -161,7 +222,11 @@
         { "name": "clk_at", "type": "TS", "nullable": false },
         { "name": "clk_dev", "type": "ID", "nullable": true }
       ],
-      "indexes": ["sync_likes_pull"]
+      "primaryKey": ["user_id", "video_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(video_id) = 11", "liked IN (0,1)"],
+      "indexes": [{ "name": "sync_likes_pull", "columns": ["user_id", "seq"], "unique": false, "where": null }]
     },
     "sync_bookmarks": {
       "columns": [
@@ -178,7 +243,11 @@
         { "name": "clk_at", "type": "TS", "nullable": false },
         { "name": "clk_dev", "type": "ID", "nullable": true }
       ],
-      "indexes": ["sync_bookmarks_pull"]
+      "primaryKey": ["user_id", "type", "browse_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(type) BETWEEN 1 AND 16", "length(browse_id) BETWEEN 1 AND 64", "bookmarked IN (0,1)"],
+      "indexes": [{ "name": "sync_bookmarks_pull", "columns": ["user_id", "seq"], "unique": false, "where": null }]
     },
     "sync_playlists": {
       "columns": [
@@ -196,7 +265,19 @@
         { "name": "clk_at", "type": "TS", "nullable": false },
         { "name": "clk_dev", "type": "ID", "nullable": true }
       ],
-      "indexes": ["sync_playlists_pull", "sync_playlists_live_browse"]
+      "primaryKey": ["user_id", "id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(name) BETWEEN 1 AND 200", "deleted IN (0,1)"],
+      "indexes": [
+        { "name": "sync_playlists_pull", "columns": ["user_id", "seq"], "unique": false, "where": null },
+        {
+          "name": "sync_playlists_live_browse",
+          "columns": ["user_id", "browse_id"],
+          "unique": false,
+          "where": "deleted = 0 AND browse_id IS NOT NULL"
+        }
+      ]
     },
     "sync_playlist_items": {
       "columns": [
@@ -214,7 +295,26 @@
         { "name": "pos_at", "type": "TS", "nullable": false },
         { "name": "pos_dev", "type": "ID", "nullable": true }
       ],
-      "indexes": ["sync_items_pull", "sync_items_order"]
+      "primaryKey": ["user_id", "playlist_id", "video_id"],
+      "unique": [],
+      "foreignKeys": [
+        {
+          "columns": ["user_id", "playlist_id"],
+          "table": "sync_playlists",
+          "references": ["user_id", "id"],
+          "onDelete": "CASCADE"
+        }
+      ],
+      "checks": ["length(video_id) = 11", "present IN (0,1)", "length(sort_key) BETWEEN 1 AND 64"],
+      "indexes": [
+        { "name": "sync_items_pull", "columns": ["user_id", "seq"], "unique": false, "where": null },
+        {
+          "name": "sync_items_order",
+          "columns": ["user_id", "playlist_id", "sort_key", "video_id"],
+          "unique": false,
+          "where": "present = 1"
+        }
+      ]
     },
     "playback_state": {
       "columns": [
@@ -236,7 +336,11 @@
         { "name": "handoff_session_id", "type": "ID", "nullable": true },
         { "name": "handoff_at", "type": "TS", "nullable": true }
       ],
-      "indexes": ["playback_state_updated"]
+      "primaryKey": ["user_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["cleared IN (0,1)", "queue_version >= 0", "idx >= 0", "position_ms >= 0", "playing IN (0,1)"],
+      "indexes": [{ "name": "playback_state_updated", "columns": ["updated_at"], "unique": false, "where": null }]
     },
     "play_events": {
       "columns": [
@@ -251,7 +355,27 @@
         { "name": "seq", "type": "BIG", "nullable": true },
         { "name": "received_at", "type": "TS", "nullable": false }
       ],
-      "indexes": ["play_events_pull", "play_events_video", "play_events_time", "play_events_recv", "play_events_idem"]
+      "primaryKey": ["user_id", "event_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": [
+        "length(video_id) = 11",
+        "play_time_ms BETWEEN 1 AND 86400000",
+        "in_history IN (0,1)",
+        "counts_playtime IN (0,1)"
+      ],
+      "indexes": [
+        { "name": "play_events_pull", "columns": ["user_id", "seq"], "unique": false, "where": "seq IS NOT NULL" },
+        {
+          "name": "play_events_video",
+          "columns": ["user_id", "video_id", "played_at"],
+          "unique": false,
+          "where": null
+        },
+        { "name": "play_events_time", "columns": ["user_id", "played_at"], "unique": false, "where": null },
+        { "name": "play_events_recv", "columns": ["user_id", "received_at"], "unique": false, "where": null },
+        { "name": "play_events_idem", "columns": ["received_at"], "unique": false, "where": "in_history = 0" }
+      ]
     },
     "play_stats": {
       "columns": [
@@ -261,7 +385,11 @@
         { "name": "last_played_at", "type": "TS", "nullable": true },
         { "name": "seq", "type": "BIG", "nullable": false }
       ],
-      "indexes": ["play_stats_pull"]
+      "primaryKey": ["user_id", "video_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(video_id) = 11"],
+      "indexes": [{ "name": "play_stats_pull", "columns": ["user_id", "seq"], "unique": false, "where": null }]
     },
     "play_forgets": {
       "columns": [
@@ -271,7 +399,11 @@
         { "name": "total_before", "type": "TS", "nullable": true },
         { "name": "seq", "type": "BIG", "nullable": false }
       ],
-      "indexes": ["play_forgets_pull"]
+      "primaryKey": ["user_id", "video_id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["video_id = '*' OR length(video_id) = 11"],
+      "indexes": [{ "name": "play_forgets_pull", "columns": ["user_id", "seq"], "unique": false, "where": null }]
     }
   }
 }

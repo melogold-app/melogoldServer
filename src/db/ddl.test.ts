@@ -203,6 +203,48 @@ describe("ddl: rules are enforced", () => {
     assert.throws(() => d.render(d.createTable("t", { "bad name": ID.notNull().primaryKey() })), DdlError);
   });
 
+  test("the model records constraints and index definitions (source of schema.snapshot.json)", async () => {
+    const recorded = ddl("postgres");
+    const { kysely } = recordingKysely("postgres");
+    await recorded.run(
+      kysely,
+      recorded.createTable("parents", { id: ID.notNull().primaryKey(), code: ID.notNull().unique() }),
+      recorded.createTable(
+        "children",
+        {
+          parent_id: ID.notNull().references("parents", "id", "CASCADE"),
+          n: recorded.types.INT.notNull().check("n >= 0"),
+          flag: recorded.types.BOOL.notNull(),
+        },
+        { primaryKey: ["parent_id", "n"], unique: [["n", "flag"]] },
+      ),
+      recorded.createIndex("children_flag", "children", ["flag", "n"], { unique: true, where: "flag = 1" }),
+      recorded.addColumn(
+        "children",
+        "other_id",
+        ID.nullable().references("parents", "id", "SET NULL").check("other_id IS NULL OR length(other_id) = 36"),
+      ),
+    );
+    await kysely.destroy();
+    const parents = recorded.model.tables.get("parents");
+    assert.deepEqual(
+      [parents?.primaryKey, parents?.unique, parents?.foreignKeys, parents?.checks, parents?.indexes],
+      [["id"], [["code"]], [], [], []],
+    );
+    const children = recorded.model.tables.get("children");
+    assert.ok(children);
+    assert.deepEqual(children.primaryKey, ["parent_id", "n"]);
+    assert.deepEqual(children.unique, [["n", "flag"]]);
+    assert.deepEqual(children.foreignKeys, [
+      { columns: ["parent_id"], table: "parents", references: ["id"], onDelete: "CASCADE" },
+      { columns: ["other_id"], table: "parents", references: ["id"], onDelete: "SET NULL" },
+    ]);
+    assert.deepEqual(children.checks, ["n >= 0", "flag IN (0,1)", "other_id IS NULL OR length(other_id) = 36"]);
+    assert.deepEqual(children.indexes, [
+      { name: "children_flag", table: "children", columns: ["flag", "n"], unique: true, where: "flag = 1" },
+    ]);
+  });
+
   test("ADD COLUMN restrictions (SQLite)", () => {
     assert.throws(() => d.render(d.addColumn("users", "x", TXT.notNull())), /needs a DEFAULT/);
     assert.throws(() => d.render(d.addColumn("users", "x", ID.notNull().default("a").unique())), /UNIQUE/);

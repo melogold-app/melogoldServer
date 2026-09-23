@@ -87,7 +87,7 @@ describe(`migrations (${TEST_DIALECT})`, () => {
     });
   });
 
-  test("the migrated schema matches the snapshot: tables, physical types, nullability, indexes", async () => {
+  test("the migrated schema matches the snapshot: tables, types, nullability, constraints, indexes", async () => {
     await withMigratedDb(async (db) => {
       const snapshot = loadSchemaSnapshot();
       assert.deepEqual(snapshot.migrations, KNOWN, "schema.snapshot.json is stale: run npm run schema:sql");
@@ -189,7 +189,7 @@ describe(`schema check (${TEST_DIALECT})`, () => {
     });
   });
 
-  test("a missing table, a different type and a different nullability are problems", async () => {
+  test("a missing table, a different type, nullability, primary key and missing constraints are problems", async () => {
     await withMigratedDb(async (db) => {
       await sql`DROP TABLE play_forgets`.execute(db.kysely);
       await sql`DROP TABLE play_stats`.execute(db.kysely);
@@ -204,6 +204,9 @@ describe(`schema check (${TEST_DIALECT})`, () => {
               "column play_stats.user_id is NULL, expected the opposite",
               'column play_stats.video_id has type text, expected text COLLATE "C" (ID)',
               "column play_stats.total_ms has type text, expected bigint (BIG)",
+              "table play_stats has primary key (video_id), expected (user_id, video_id)",
+              "foreign key (user_id) REFERENCES users(id) ON DELETE CASCADE on play_stats is missing",
+              "check (length(video_id) = 11) on play_stats is missing",
               "index play_stats_pull is missing",
               "table play_forgets is missing",
             ]
@@ -213,11 +216,86 @@ describe(`schema check (${TEST_DIALECT})`, () => {
               "column play_stats.total_ms has type TEXT, expected INTEGER (BIG)",
               "column play_stats.last_played_at has type BIGINT, expected INTEGER (TS)",
               "column play_stats.seq has type BIGINT, expected INTEGER (BIG)",
+              "table play_stats has primary key (video_id), expected (user_id, video_id)",
+              "foreign key (user_id) REFERENCES users(id) ON DELETE CASCADE on play_stats is missing",
+              "check (length(video_id) = 11) on play_stats is missing",
               "index play_stats_pull is missing",
               "table play_forgets is missing",
             ];
       assert.deepEqual(diff.problems, expected);
       assert.deepEqual(diff.extras, []);
+    });
+  });
+
+  test("constraint and index-definition drift is a problem; strict refuses to start", async () => {
+    await withMigratedDb(async (db) => {
+      const run = (statement: string) => sql.raw(statement).execute(db.kysely);
+      // Same index names, other definitions (both dialects).
+      await run("DROP INDEX sync_items_order");
+      await run("CREATE INDEX sync_items_order ON sync_playlist_items (seq)");
+      await run("DROP INDEX sync_ops_op");
+      await run("CREATE INDEX sync_ops_op ON sync_ops (user_id, op_id)");
+      await run("DROP INDEX users_deleted");
+      await run("CREATE INDEX users_deleted ON users (deleted_at) WHERE deleted_at IS NULL");
+      const expected = [
+        "index sync_items_order is on (seq), expected (user_id, playlist_id, sort_key, video_id)",
+        "index sync_items_order has predicate none, expected WHERE present = 1",
+        "index sync_ops_op is not UNIQUE, expected the opposite",
+      ];
+      const extras: RegExp[] = [];
+      if (TEST_DIALECT === "postgres") {
+        await run("ALTER TABLE users DROP CONSTRAINT users_login_key");
+        await run("ALTER TABLE sync_tracks DROP CONSTRAINT sync_tracks_video_id_check");
+        await run("ALTER TABLE devices DROP CONSTRAINT devices_user_id_fkey");
+        await run("ALTER TABLE sync_heads DROP CONSTRAINT sync_heads_epoch_check");
+        await run("ALTER TABLE sync_heads ADD CONSTRAINT sync_heads_epoch_check CHECK (length(epoch) BETWEEN 8 AND 9)");
+        expected.push(
+          "index users_deleted has predicate WHERE (deleted_at IS NULL), expected WHERE deleted_at IS NOT NULL",
+          "unique (login) on users is missing",
+          "check (length(video_id) = 11) on sync_tracks is missing",
+          "foreign key (user_id) REFERENCES users(id) ON DELETE CASCADE on devices is missing",
+          "check (length(epoch) = 8) on sync_heads is missing",
+        );
+      } else {
+        // SQLite changes constraints only by rebuilding the table (nothing references these two).
+        const rebuild = async (table: string, edit: (createTable: string) => string) => {
+          const { rows } = await sql<{ sql: string }>`SELECT sql FROM sqlite_schema WHERE name = ${table}`.execute(
+            db.kysely,
+          );
+          await run(`ALTER TABLE ${table} RENAME TO ${table}_old`);
+          await run(edit(rows[0]?.sql ?? ""));
+          await run(`INSERT INTO ${table} SELECT * FROM ${table}_old`);
+          await run(`DROP TABLE ${table}_old`);
+        };
+        await rebuild("sync_heads", (text) =>
+          text
+            .replace(" REFERENCES users(id) ON DELETE CASCADE", "")
+            .replace("CHECK (length(epoch) = 8)", "CHECK (length(epoch) BETWEEN 8 AND 9)"),
+        );
+        await rebuild("refresh_tokens", (text) =>
+          text.replace("token_hash                TEXT NOT NULL UNIQUE", "token_hash TEXT NOT NULL"),
+        );
+        expected.push(
+          "index users_deleted has predicate WHERE deleted_at IS NULL, expected WHERE deleted_at IS NOT NULL",
+          "foreign key (user_id) REFERENCES users(id) ON DELETE CASCADE on sync_heads is missing",
+          "check (length(epoch) = 8) on sync_heads is missing",
+          "unique (token_hash) on refresh_tokens is missing",
+        );
+      }
+      extras.push(/^check \(.*length\(epoch\).*9.*\) on sync_heads is not in the snapshot$/);
+
+      const diff = compareSchema(loadSchemaSnapshot(), await introspectSchema(db.kysely, db.dialect), db.dialect);
+      for (const problem of expected)
+        assert.ok(diff.problems.includes(problem), `${problem}\n${diff.problems.join("\n")}`);
+      for (const extra of extras)
+        assert.ok(
+          diff.extras.some((item) => extra.test(item)),
+          diff.extras.join("\n"),
+        );
+      await assert.rejects(
+        checkSchema(db.kysely, db.dialect, { mode: "strict", log: recordingLog().log }),
+        SchemaMismatchError,
+      );
     });
   });
 

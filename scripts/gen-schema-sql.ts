@@ -1,8 +1,9 @@
 /**
  * `npm run schema:sql`: renders the migrations (src/db/migrations) without a database and writes
  * - docs/schema.sqlite.sql and docs/schema.postgres.sql: the DDL each dialect executes (API §9.1 rule 9);
- * - src/db/schema.snapshot.json: tables, columns (logical type, nullability) and indexes, compared with the live
- *   database at startup (`schema-check.ts`, DESIGN §6.2);
+ * - src/db/schema.snapshot.json: tables, columns (logical type, nullability), constraints (primary key, `UNIQUE`,
+ *   foreign keys, `CHECK`) and index definitions, compared with the live database at startup (`schema-check.ts`,
+ *   DESIGN §6.2);
  * - src/db/types.ts: the Kysely table types.
  *
  * `npm run schema:sql:check` regenerates and fails when the committed files differ.
@@ -11,7 +12,7 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { format, resolveConfig } from "prettier";
 import { ddl, recordingKysely } from "../src/db/ddl.ts";
-import type { LogicalType, SchemaModel, SqlDialect } from "../src/db/ddl.ts";
+import type { LogicalType, ModelForeignKey, SchemaModel, SqlDialect } from "../src/db/ddl.ts";
 import { MIGRATIONS } from "../src/db/migrations/index.ts";
 
 const root = new URL("../", import.meta.url);
@@ -51,34 +52,55 @@ function sqlFile(dialect: SqlDialect, rendered: Rendered): string {
   return `${header.join("\n")}\n\n${body.join("\n\n")}\n`;
 }
 
-type Snapshot = {
-  $comment: string;
-  migrations: string[];
-  tables: Record<string, { columns: { name: string; type: LogicalType; nullable: boolean }[]; indexes: string[] }>;
+type SnapshotIndex = { name: string; columns: string[]; unique: boolean; where: string | null };
+type SnapshotTable = {
+  columns: { name: string; type: LogicalType; nullable: boolean }[];
+  primaryKey: string[];
+  unique: string[][];
+  foreignKeys: ModelForeignKey[];
+  checks: string[];
+  indexes: SnapshotIndex[];
 };
+type Snapshot = { $comment: string; migrations: string[]; tables: Record<string, SnapshotTable> };
 
 function snapshot(model: SchemaModel): Snapshot {
   const tables: Snapshot["tables"] = {};
   for (const table of model.tables.values()) {
     tables[table.name] = {
       columns: table.columns.map((column) => ({ name: column.name, type: column.type, nullable: column.nullable })),
-      indexes: [...table.indexes],
+      primaryKey: [...table.primaryKey],
+      unique: table.unique.map((columns) => [...columns]),
+      foreignKeys: table.foreignKeys.map((foreignKey) => ({ ...foreignKey })),
+      checks: [...table.checks],
+      indexes: table.indexes.map(({ name, columns, unique, where }) => ({
+        name,
+        columns: [...columns],
+        unique,
+        where,
+      })),
     };
   }
   return { $comment: GENERATED_BY, migrations: MIGRATIONS.map((migration) => migration.name), tables };
 }
 
-/** JSON with one line per column, so that the file reads like a table (Prettier keeps short objects inline). */
+/** A JSON array with one item per line (or `[]`), so that the file reads like a table. */
+function lines(items: readonly unknown[]): string {
+  if (items.length === 0) return "[]";
+  return `[\n${items.map((item) => `        ${JSON.stringify(item)}`).join(",\n")}\n      ]`;
+}
+
+/** JSON with one line per column, constraint and index (Prettier keeps short objects inline). */
 function snapshotJson(value: Snapshot): string {
   const j = (item: unknown) => JSON.stringify(item);
   const tables = Object.entries(value.tables).map(([name, table]) => {
-    const columns = table.columns.map(
-      (column) => `        { "name": ${j(column.name)}, "type": ${j(column.type)}, "nullable": ${j(column.nullable)} }`,
-    );
     return [
       `    ${j(name)}: {`,
-      `      "columns": [\n${columns.join(",\n")}\n      ],`,
-      `      "indexes": ${j(table.indexes)}`,
+      `      "columns": ${lines(table.columns)},`,
+      `      "primaryKey": ${j(table.primaryKey)},`,
+      `      "unique": ${j(table.unique)},`,
+      `      "foreignKeys": ${lines(table.foreignKeys)},`,
+      `      "checks": ${lines(table.checks)},`,
+      `      "indexes": ${lines(table.indexes)}`,
       "    }",
     ].join("\n");
   });
