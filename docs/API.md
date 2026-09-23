@@ -44,7 +44,7 @@
 | Запрос | Где | Правило |
 |---|---|---|
 | `Authorization: Bearer <accessToken>` | все маршруты, кроме помеченных public | закрыто по умолчанию |
-| `Content-Type: application/json` | любой POST/PUT/PATCH | UTF-8. **Тело — JSON-объект, как минимум `{}`**. Иное → `415 unsupported_media_type`. Пустое тело → `400 invalid_json` |
+| `Content-Type: application/json` | любой POST/PUT/PATCH | UTF-8. **Тело — JSON-объект, как минимум `{}`**. Другой или отсутствующий `Content-Type` (или `charset` не UTF-8) → `415 unsupported_media_type`. Пустое тело или не JSON → `400 invalid_json`. JSON, но не объект (`null`, `[]`, число) → `400 invalid_request`. Тело DELETE не читается при любом `Content-Type` |
 | `Accept-Encoding: gzip` | все | рекомендуется |
 | `User-Agent: melogold-<android\|macos\|windows\|linux>/<semver>` | все | обязателен у клиентов, сервер только логирует |
 | `Accept-Language` | все | BCP 47. Влияет только на строки, которые сервер пишет сам (имя плейлиста восстановления, «Без названия»). Сообщения ошибок не локализуются |
@@ -77,6 +77,7 @@
   - лишние поля отбрасываются молча.
 - **Клиенты** игнорируют неизвестные поля и переживают неизвестные значения перечислений. В OpenAPI у полей ответов тип `type: string`, а список значений указан в `description`. `enum` используется только в запросах.
 - **Полиморфизма нет** (`oneOf`/`anyOf`/discriminator). `SyncOp` описан плоской схемой с полем `kind`.
+- **`X | null` для компонента `X`** в OpenAPI записывается как `{type: object, nullable: true, allOf: [{$ref: X}]}`: другой формы без `oneOf`/`anyOf` в 3.0.3 нет. Буквальный валидатор 3.0.3 относит `nullable` только к `type` той же схемы и отверг бы `null` из-за `allOf`. Клиенты и генераторы понимают эту форму как «`X` или `null`».
 
 ### 1.4 Строки и числа
 - **Санитизация.** До валидации сервер обходит все строки тела запроса:
@@ -94,7 +95,7 @@
   - `Int32` ≤ 2 147 483 647 (zod `.max`);
   - остальные ≤ 2^53−1.
 
-  Дробных чисел в API нет.
+  Дробных чисел и отрицательных целых в API нет. В OpenAPI у каждого целого есть `format`: `int32`, если его `maximum` помещается в `Int32`, иначе `int64` (Kotlin `Long`, C# `long`, Swift `Int64`, Rust `i64`).
 
 ### 1.5 Время
 - **Сервер отдаёт** время строго в виде `YYYY-MM-DDTHH:mm:ss.sssZ`.
@@ -223,7 +224,7 @@ type ErrorResponse = {
   // детали — только у своих кодов:
   retryAfterSeconds?: number; issues?: ValidationIssue[]; minLength?: number; maxLength?: number;
   deviceLimit?: number; deviceCount?: number; minProtocol?: number; maxProtocol?: number;
-  floorCursor?: string; minDeviceAgeDays?: number;
+  floorCursor?: string;
 };
 type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код zod */ };
 ```
@@ -297,8 +298,8 @@ type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код
 | Ошибка | Ответ |
 |---|---|
 | unique / FK (PG `23505`/`23503`; SQLite `SQLITE_CONSTRAINT_UNIQUE`/`_PRIMARYKEY`/`_FOREIGNKEY`) | сервис переводит в свой код. Непереведённая → 500 |
-| PG `40P01`, `40001`, `55P03`, `57014`, `53300`; SQLite `SQLITE_BUSY` после `busy_timeout` | `503 server_busy`, `Retry-After: 1..2` |
-| PG `08*`, `57P01` | `503 unavailable`, `Retry-After: 5` |
+| PG `40P01`, `40001`, `55P03`, `57014`, `53300`; пул `pg` не дождался свободного соединения (`timeout exceeded when trying to connect`); SQLite `SQLITE_BUSY*` после `busy_timeout`, `SQLITE_LOCKED*` | `503 server_busy`, `Retry-After: 1..2` |
+| PG `08*`, `57P01`, `57P03`; нет сетевого соединения с БД (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, …, обрыв соединения `pg`) | `503 unavailable`, `Retry-After: 5` |
 | PG `53100`; SQLite `SQLITE_FULL` | `503 storage_full`, `Retry-After: 600` |
 | PG `22021` (NUL), `22003` (переполнение) | не должны возникать (§1.4). Если возникли → 500 и это баг |
 

@@ -1,0 +1,45 @@
+# PostgreSQL 18 for local development and `npm run test:pg` (DESIGN §10, PLAN M0).
+# The database uses the libc locale en_US.UTF-8 on purpose: a non-C collation exposes
+# ID columns without COLLATE "C" (non-byte order; 42P22 where two non-default collations
+# meet; review item M10), exactly as CI does.
+#
+#   npm run db:up     # docker compose -f compose.dev.yml up -d --wait
+#   npm run test:pg   # TEST_DATABASE_URL=postgres://melogold:melogold@127.0.0.1:55432/melogold
+#   npm run db:down
+name: melogold-dev
+
+services:
+  postgres:
+    image: postgres:18-trixie
+    environment:
+      POSTGRES_USER: melogold
+      POSTGRES_PASSWORD: melogold
+      POSTGRES_DB: melogold
+      LANG: en_US.UTF-8
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale-provider=libc --locale=en_US.UTF-8
+    # Development only: durability is traded for test speed.
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - max_connections=300
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # Over TCP: the entrypoint's temporary init server listens only on the Unix socket, so a socket probe could
+      # report healthy (and `up --wait` return) before the final server starts.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U melogold -d melogold"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  pgdata:

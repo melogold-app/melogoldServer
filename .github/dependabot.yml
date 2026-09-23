@@ -1,0 +1,49 @@
+# Dependabot (PLAN M0 step 0.10): npm packages and the SHA-pinned GitHub Actions.
+# Base images are not tracked here: the Dockerfile builds their tags from ARG NODE_MAJOR (DESIGN §7.1), and the
+# floating tags node:24-trixie-slim, distroless nodejs24-debian13 and postgres:18-trixie get patch releases on rebuild.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    # A release must be a week old before it is proposed (supply-chain safety).
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+      tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Versions fixed by DESIGN §6.1 and AGENTS.md; they move only by a deliberate decision of the lead.
+      - dependency-name: typescript # 6.0.x: typescript-eslint supports only < 6.1
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: "@types/node" # Node 24 LTS: no typings of newer APIs
+        update-types: [version-update:semver-major]
+      - dependency-name: kysely # ~0.29.6
+        update-types: [version-update:semver-major, version-update:semver-minor]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]

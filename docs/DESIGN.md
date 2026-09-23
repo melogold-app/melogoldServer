@@ -100,7 +100,7 @@
 | 5 | История | События только на добавление (`play_events`) плюс отдельный серверный счётчик `play_stats` | В ViTune счётчик и история независимы (`A/service/PlayerService.kt:461-491`) |
 | 6 | Playback | Одна строка на пользователя, CAS по `rev`, SSE, блокировка старой сессии после передачи | «Последний активный плеер», без журнала |
 | 7 | Слой БД | Kysely 0.29.6: одна схема, одни миграции, один код запросов. Диалект выбирается по схеме `DATABASE_URL` | Drizzle и Prisma требуют двух схем. TypeORM подводил в Clementine (944ecb3, 31e3c68) |
-| 8 | Collation в PG | Все идентификаторы — `ID` = `text COLLATE "C"` | Иначе сравнение колонок даёт `42P22` только на PG (M10) |
+| 8 | Collation в PG | Все идентификаторы — `ID` = `text COLLATE "C"` | Иначе сравнение и порядок идентификаторов зависят от локали БД (на `en_US.UTF-8` порядок не байтовый, в отличие от SQLite), а встреча двух разных не-default collation (`"C"` и `en_US.utf8`) даёт `42P22` только на PG (M10) |
 | 9 | Рантайм | Node 24 LTS, `.ts` без сборки, distroless `nodejs24-debian13:nonroot` | Нет `dist/`, стек-трейсы указывают на исходник. Node 26 — после выхода в LTS |
 | 10 | HTTP и контракт | Fastify 5, fastify-type-provider-zod 7, zod 4, OpenAPI **3.0.3** | Паттерны Clementine. progenitor (Rust) понимает только 3.0.x |
 | 11 | Аккаунт | Логин `[a-z0-9._-]` 3–32 символа плюс пароль. Почты нет | Решение пользователя. Защита от гомоглифов. Расширить набор символов позже можно без поломок |
@@ -1216,7 +1216,7 @@ FROM node:${NODE_MAJOR}-trixie-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts \
- && node --input-type=module -e "await import('better-sqlite3'); await import('argon2')" \
+ && node --input-type=module -e "const { default: Database } = await import('better-sqlite3'); new Database(':memory:').prepare('SELECT 1').get(); await import('argon2')" \
  && mkdir -p /skel/data/.tmp
 
 FROM gcr.io/distroless/nodejs${NODE_MAJOR}-debian13:nonroot
@@ -1245,7 +1245,7 @@ CMD ["serve"]
   import("/app/src/main.ts").then((m) => m.main(process.argv.slice(2)));
   ```
   Файл без расширения исполняется как CJS, а `import()` загружает TS через type stripping. `serve` запускает сервер, остальные команды — CLI без fastify.
-- **`--ignore-scripts` безопасен** (m25): у better-sqlite3 13.0.3 `gypfile:false` и prebuilds в пакете, argon2 находит свой prebuild при загрузке. Проверка — шаг `import` в стадии `deps`.
+- **`--ignore-scripts` безопасен** (m25): у better-sqlite3 13.0.3 `gypfile:false` и prebuilds в пакете, argon2 находит свой prebuild при загрузке. Проверка — шаг в стадии `deps`: он открывает `new Database(':memory:')` и выполняет `SELECT 1` (один `import('better-sqlite3')` нативный модуль не загружает), затем импортирует argon2.
 - **`VOLUME` не объявляется.** Приложение по `/proc/self/mountinfo` проверяет, что `/data` смонтирован, и громко предупреждает, если нет.
 - **`.dockerignore`** исключает тесты, `spec/`, `docs/`, `deploy/`, `.git`, `node_modules`.
 - **Цель по размеру:** меньше 80 МБ сжатого образа.
@@ -1602,7 +1602,7 @@ docker exec melogold melogold backup --out - > melogold-$(date +%F).sqlite
 - **Контрактные тесты:**
   - у каждой ошибки есть 4 ключа и `code` из реестра;
   - закрытость по умолчанию: маршрут без токена → 401;
-  - у каждой операции OpenAPI есть `operationId`, 4xx-ответ и именованные компоненты;
+  - у каждой операции OpenAPI есть `operationId`, 4xx-ответ (кроме проб `GET /health` и `GET /health/live`: входа у них нет, ответы только 200 или 5xx) и именованные компоненты;
   - `spec/error-codes.json` совпадает с кодом.
 - **Паритет схемы:** интроспекция совпадает со снапшотом на обоих диалектах.
 - **Обязательные регрессии ревью:**
@@ -1611,7 +1611,7 @@ docker exec melogold melogold backup --out - > melogold-$(date +%F).sqlite
   - M4: logout старым токеном;
   - M5: SSE после revoke из CLI и после `exp`;
   - M6: матрица;
-  - M10: join items → tracks на PG с не-C локалью;
+  - M10: join items → tracks на PG с не-C локалью, байтовый порядок `video_id` и `collation_name = 'C'` у обеих колонок join;
   - M11: конфликт внутри транзакции;
   - M12: `\u0000` и int > 2³¹ → 400 или санитизация, а не 500;
   - M13: бюджет → 413;
