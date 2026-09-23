@@ -19,8 +19,19 @@
  * | busy / unreachable / full database (`src/db/errors.ts`)       | `503 server_busy` / `unavailable` / `storage_full` |
  * | other 4xx of Fastify or plugins                               | by status: 400/404/413/415/429, else 400        |
  * | anything else (bugs, constraint violations, serialization)    | `500 internal_error`, logged                    |
+ *
+ * Two kinds of errors never reach that handler, because Fastify raises them before routing or before a request exists:
+ *
+ * - {@link handleFrameworkError} (Fastify `frameworkErrors`): a path that does not decode (`GET /%`), a path parameter
+ *   over `maxParamLength`, a failing async route constraint. No hook runs for these, so the handler sets `X-Request-Id`
+ *   itself.
+ * - {@link handleClientError} (Fastify `clientErrorHandler`): a request Node's HTTP parser rejects (malformed request
+ *   line, headers over 16 KiB). The response is written straight to the socket, which is then closed.
  */
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { randomUUID } from "node:crypto";
+import { STATUS_CODES } from "node:http";
+import type { Socket } from "node:net";
+import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { hasZodFastifySchemaValidationErrors, isResponseSerializationError } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { translateDbError } from "../db/errors.ts";
@@ -185,6 +196,77 @@ function logError(request: FastifyRequest, error: unknown, plan: ErrorReply): vo
   } else if (plan.log === "warn") {
     request.log.warn({ err: error, code: plan.body.code }, "request refused: server condition");
   }
+}
+
+/**
+ * The reply to an error Fastify raises before routing (`frameworkErrors`): `FST_ERR_BAD_URL` and
+ * `FST_ERR_MAX_PARAM_LENGTH` are the client's (`400 invalid_request`, path `url`), anything else (a failing async
+ * route constraint) is the server's (`500 internal_error`).
+ */
+export function frameworkErrorReply(error: unknown): ErrorReply {
+  switch (asRecord(error)?.code) {
+    case "FST_ERR_BAD_URL":
+      return errorReply("invalid_request", { details: { issues: [{ path: "url", code: "invalid_format" }] } });
+    case "FST_ERR_MAX_PARAM_LENGTH":
+      return errorReply("invalid_request", { details: { issues: [{ path: "url", code: "too_big" }] } });
+    default:
+      return errorReply("internal_error");
+  }
+}
+
+/**
+ * Fastify `frameworkErrors`. The request never matched a route, so no hook runs: `X-Request-Id` and the request log
+ * line are written here, `no-store` by {@link sendErrorReply}.
+ */
+export function handleFrameworkError(error: FastifyError, request: FastifyRequest, reply: FastifyReply): void {
+  const plan = frameworkErrorReply(error);
+  logError(request, error, plan);
+  request.log.info({ method: request.method, route: null, statusCode: plan.statusCode }, "request");
+  void sendErrorReply(reply.header("x-request-id", request.id), plan);
+}
+
+/**
+ * The raw HTTP/1.1 response to a request Node's parser rejected (`clientError`), or `null` when nothing is written:
+ *
+ * - `ECONNRESET`: the client is gone;
+ * - `ERR_HTTP_REQUEST_TIMEOUT`: `408` without a body, as Node answers (not JSON, so clients go by the status, API §1.2);
+ * - headers over Node's limit (`HPE_HEADER_OVERFLOW`): `400 invalid_request`, issue `headers`/`too_big`;
+ * - any other parse error: `400 invalid_request`, issue `request`/`invalid_format`.
+ *
+ * JSON answers carry the envelope of API §2.1, a new `X-Request-Id` and `Cache-Control: no-store`; the connection
+ * is always closed.
+ */
+export function clientErrorResponse(
+  error: Readonly<{ code?: unknown }>,
+  requestId: string = randomUUID(),
+): string | null {
+  if (error.code === "ECONNRESET") return null;
+  if (error.code === "ERR_HTTP_REQUEST_TIMEOUT") {
+    return "HTTP/1.1 408 Request Timeout\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+  }
+  const issue =
+    error.code === "HPE_HEADER_OVERFLOW"
+      ? { path: "headers", code: "too_big" }
+      : { path: "request", code: "invalid_format" };
+  const plan = errorReply("invalid_request", { details: { issues: [issue] } });
+  const body = JSON.stringify(plan.body);
+  return (
+    `HTTP/1.1 ${plan.statusCode} ${STATUS_CODES[plan.statusCode] ?? ""}\r\n` +
+    "Content-Type: application/json; charset=utf-8\r\n" +
+    `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+    "Cache-Control: no-store\r\n" +
+    `X-Request-Id: ${requestId}\r\n` +
+    "Connection: close\r\n\r\n" +
+    body
+  );
+}
+
+/** Fastify `clientErrorHandler`: writes {@link clientErrorResponse} if the socket still can, then destroys it. */
+export function handleClientError(error: Error & { code?: unknown }, socket: Socket): void {
+  if (error.code === "ECONNRESET" || socket.destroyed) return;
+  const response = clientErrorResponse(error);
+  if (response !== null && socket.writable) socket.write(response);
+  socket.destroy(error);
 }
 
 export type ErrorHandlerOptions = Readonly<{

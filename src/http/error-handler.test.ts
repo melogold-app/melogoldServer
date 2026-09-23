@@ -5,7 +5,13 @@ import { z } from "zod";
 import { SemaphoreFullError } from "../lib/semaphore.ts";
 import { ERROR_CODES } from "./error-codes.ts";
 import type { ErrorCode } from "./error-codes.ts";
-import { MAX_VALIDATION_ISSUES, errorReply, toErrorReply } from "./error-handler.ts";
+import {
+  MAX_VALIDATION_ISSUES,
+  clientErrorResponse,
+  errorReply,
+  frameworkErrorReply,
+  toErrorReply,
+} from "./error-handler.ts";
 import { AppError, isAppError } from "./errors.ts";
 
 const ENVELOPE = ["statusCode", "error", "message", "code"];
@@ -207,5 +213,53 @@ describe("toErrorReply", () => {
       assert.equal(reply.body.message, "Internal server error");
       assert.equal(reply.log, "error");
     }
+  });
+});
+
+describe("errors raised before routing", () => {
+  test("frameworkErrors: bad URL and long parameter → 400 invalid_request at `url`; async constraint → 500", () => {
+    const badUrl = frameworkErrorReply(fastifyError("FST_ERR_BAD_URL", 400));
+    assert.equal(badUrl.statusCode, 400);
+    assert.deepEqual(badUrl.body, {
+      statusCode: 400,
+      error: "Invalid request",
+      message: "Invalid request",
+      code: "invalid_request",
+      issues: [{ path: "url", code: "invalid_format" }],
+    });
+    const long = frameworkErrorReply(fastifyError("FST_ERR_MAX_PARAM_LENGTH", 414));
+    assert.equal(long.statusCode, 400);
+    assert.deepEqual(long.body.issues, [{ path: "url", code: "too_big" }]);
+    const constraint = frameworkErrorReply(fastifyError("FST_ERR_ASYNC_CONSTRAINT", 500));
+    assert.equal(constraint.body.code, "internal_error");
+    assert.equal(constraint.log, "error");
+  });
+
+  test("clientError: header overflow and parse errors → 400 envelope; reset → nothing; timeout → bare 408", () => {
+    const overflow = clientErrorResponse({ code: "HPE_HEADER_OVERFLOW" }, "req-id-0001");
+    assert.ok(overflow !== null);
+    const [head = "", body = ""] = overflow.split("\r\n\r\n");
+    const lines = head.split("\r\n");
+    assert.equal(lines[0], "HTTP/1.1 400 Bad Request");
+    assert.ok(lines.includes("Content-Type: application/json; charset=utf-8"));
+    assert.ok(lines.includes("Cache-Control: no-store"));
+    assert.ok(lines.includes("X-Request-Id: req-id-0001"));
+    assert.ok(lines.includes("Connection: close"));
+    assert.ok(lines.includes(`Content-Length: ${Buffer.byteLength(body)}`));
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    assert.deepEqual(Object.keys(parsed), [...ENVELOPE, "issues"]);
+    assert.equal(parsed.code, "invalid_request");
+    assert.deepEqual(parsed.issues, [{ path: "headers", code: "too_big" }]);
+
+    const parse = clientErrorResponse({ code: "HPE_INVALID_METHOD" }) ?? "";
+    const parseBody = JSON.parse(parse.split("\r\n\r\n")[1] ?? "") as Record<string, unknown>;
+    assert.deepEqual(parseBody.issues, [{ path: "request", code: "invalid_format" }]);
+    assert.match(parse, /\r\nX-Request-Id: [0-9a-f-]{36}\r\n/);
+
+    assert.equal(clientErrorResponse({ code: "ECONNRESET" }), null);
+    assert.equal(
+      clientErrorResponse({ code: "ERR_HTTP_REQUEST_TIMEOUT" }),
+      "HTTP/1.1 408 Request Timeout\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
   });
 });

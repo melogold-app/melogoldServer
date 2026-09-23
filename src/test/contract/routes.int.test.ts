@@ -220,6 +220,21 @@ describe("routes of API §3", () => {
     assertError(response, 400, "invalid_request");
   });
 
+  test("a path Fastify rejects before routing is 400 invalid_request with X-Request-Id and no-store", async () => {
+    const cases = [
+      ["/%", "invalid_format"],
+      ["/auth/me/links/%zz", "invalid_format"],
+      [`/auth/me/links/${"a".repeat(101)}`, "too_big"],
+    ] as const;
+    for (const [url, code] of cases) {
+      const response = await t.app.inject({ method: "GET", url, headers: bearer(account.session.tokens.accessToken) });
+      const body = assertError(response, 400, "invalid_request");
+      assert.deepEqual(body.issues, [{ path: "url", code }], url);
+      assert.equal(response.headers["cache-control"], "no-store");
+      assert.match(String(response.headers["x-request-id"]), /^[0-9a-f-]{36}$/);
+    }
+  });
+
   test("X-Sync-Protocol is checked on its routes: missing → 400, unsupported → 409", async () => {
     for (const route of ROUTES.filter((item) => item.syncProtocol)) {
       const options = request(route, { token: account.session.tokens.accessToken });

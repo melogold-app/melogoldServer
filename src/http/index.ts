@@ -30,7 +30,7 @@ import { registerBodyRules } from "./body-rules.ts";
 import { trustProxyOption } from "./client-ip.ts";
 import { registerStorageCheck } from "./disk-guard.ts";
 import type { DiskGuard } from "./disk-guard.ts";
-import { registerErrorHandler } from "./error-handler.ts";
+import { handleClientError, handleFrameworkError, registerErrorHandler } from "./error-handler.ts";
 import { createIpTagger, genReqId, logController, loggerOptions, registerRequestLogging } from "./logging.ts";
 import type { IpTagger } from "./logging.ts";
 import { registerRateLimits } from "./rate-limit.ts";
@@ -41,7 +41,8 @@ import { registerCompression, registerCors, registerDraining, registerSecurityHe
 
 /**
  * Fastify constructor options owned by the HTTP layer: logger (masking, no automatic request lines), request ids,
- * `trustProxy` from `TRUST_PROXY`, the default body limit.
+ * `trustProxy` from `TRUST_PROXY`, the default body limit, and the API envelope for the errors raised before routing
+ * (`frameworkErrors`) and by Node's HTTP parser (`clientErrorHandler`).
  */
 export function fastifyServerOptions(env: Pick<Env, "LOG_LEVEL" | "TRUST_PROXY">): FastifyServerOptions {
   return {
@@ -51,6 +52,8 @@ export function fastifyServerOptions(env: Pick<Env, "LOG_LEVEL" | "TRUST_PROXY">
     requestIdHeader: false,
     trustProxy: trustProxyOption(env.TRUST_PROXY),
     bodyLimit: BODY_LIMITS.default,
+    frameworkErrors: handleFrameworkError,
+    clientErrorHandler: handleClientError,
   };
 }
 

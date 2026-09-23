@@ -4,6 +4,9 @@
  * request ids and cache headers. Rate limits are in `rate-limit.int.test.ts`.
  */
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import { connect } from "node:net";
+import type { AddressInfo } from "node:net";
 import { after, before, describe, test } from "node:test";
 import fastify from "fastify";
 import type { FastifyInstance, LightMyRequestResponse } from "fastify";
@@ -159,6 +162,18 @@ async function account(now = T0): Promise<Account> {
     return issueSession(q, { userId, deviceId, authVersion: 1, now }, SESSION);
   });
   return { userId, deviceId, session };
+}
+
+/** Sends raw bytes to a listening server and returns everything it answers until it closes the connection. */
+async function rawExchange(port: number, request: string): Promise<string> {
+  const socket = connect({ host: "127.0.0.1", port });
+  const chunks: Buffer[] = [];
+  socket.on("data", (chunk: Buffer) => chunks.push(chunk));
+  socket.on("error", () => undefined);
+  await once(socket, "connect");
+  socket.write(request);
+  await once(socket, "close");
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
@@ -526,6 +541,51 @@ describe(`HTTP infrastructure (${TEST_DIALECT})`, () => {
         (await app.inject({ method: "GET", url: "/server/info" })).headers["cache-control"],
         "public, max-age=60",
       );
+    });
+
+    test("URLs rejected before routing (bad encoding, parameter over 100 chars) → the envelope with X-Request-Id", async () => {
+      const cases = [
+        ["GET", "/%", "invalid_format"],
+        ["PATCH", "/auth/me/devices/%zz", "invalid_format"],
+        ["PATCH", `/auth/me/devices/${"a".repeat(101)}`, "too_big"],
+      ] as const;
+      for (const [method, url, issue] of cases) {
+        const response = await app.inject({ method, url });
+        const body = assertError(response, 400, "invalid_request");
+        assert.deepEqual(body.issues, [{ path: "url", code: issue }], url);
+        assert.match(String(response.headers["x-request-id"]), /^[0-9a-f-]{36}$/);
+      }
+      const kept = await app.inject({ method: "GET", url: "/%", headers: { "x-request-id": "client-req-0002" } });
+      assert.equal(kept.headers["x-request-id"], "client-req-0002");
+    });
+
+    test("requests Node's parser rejects → 400 envelope on the socket, then the connection closes", async () => {
+      const listening = await buildApp({ clock });
+      try {
+        await listening.listen({ host: "127.0.0.1", port: 0 });
+        const { port } = listening.server.address() as AddressInfo;
+        const exchanges = [
+          [`GET /health HTTP/1.1\r\nHost: x\r\nX-Big: ${"a".repeat(17 * 1024)}\r\n\r\n`, "headers", "too_big"],
+          ["HELLO\r\n\r\n", "request", "invalid_format"],
+        ] as const;
+        for (const [request, path, code] of exchanges) {
+          const answer = await rawExchange(port, request);
+          const [head = "", payload = ""] = answer.split("\r\n\r\n");
+          const lines = head.split("\r\n");
+          assert.equal(lines[0], "HTTP/1.1 400 Bad Request", answer);
+          assert.ok(lines.includes("Cache-Control: no-store"), head);
+          assert.ok(
+            lines.some((line) => /^X-Request-Id: [0-9a-f-]{36}$/.test(line)),
+            head,
+          );
+          const body = JSON.parse(payload) as Record<string, unknown>;
+          assert.deepEqual(Object.keys(body), ["statusCode", "error", "message", "code", "issues"]);
+          assert.equal(body.code, "invalid_request");
+          assert.deepEqual(body.issues, [{ path, code }]);
+        }
+      } finally {
+        await listening.close();
+      }
     });
   });
 });
