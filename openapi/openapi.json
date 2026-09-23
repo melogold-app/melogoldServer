@@ -7255,11 +7255,13 @@
           "title": {
             "type": "string",
             "maxLength": 500,
+            "nullable": true,
             "description": "Empty → metadata stub; truncated to 500. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "artistsText": {
             "type": "string",
             "maxLength": 500,
+            "nullable": true,
             "description": "Truncated to 500. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "artists": {
@@ -7268,42 +7270,50 @@
             "items": {
               "$ref": "#/components/schemas/ArtistRef"
             },
+            "nullable": true,
             "description": "Invalid items are dropped. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "albumId": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "nullable": true,
             "description": "BrowseId. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "albumTitle": {
             "type": "string",
             "maxLength": 500,
+            "nullable": true,
             "description": "Truncated to 500. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "durationMs": {
             "type": "integer",
             "maximum": 2147483647,
+            "nullable": true,
             "description": "Int32. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "durationText": {
             "type": "string",
             "maxLength": 16,
+            "nullable": true,
             "description": "\"3:33\", \"1:02:03\". Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "thumbnailUrl": {
             "type": "string",
             "maxLength": 2048,
             "pattern": "^https?:\\/\\/",
+            "nullable": true,
             "description": "HttpUrl. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "explicit": {
             "type": "boolean",
+            "nullable": true,
             "description": "Boolean. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "videoType": {
             "type": "string",
             "maxLength": 32,
             "pattern": "^[a-z_]{1,32}$",
+            "nullable": true,
             "description": "song, video, ugc, live, podcast_episode, … Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           }
         },

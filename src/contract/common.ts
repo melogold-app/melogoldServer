@@ -374,12 +374,19 @@ function componentRef(id: string): { $ref: string } {
   return { $ref: `#/components/schemas/${id}` };
 }
 
-/** A metadata field parsed leniently by the service (DESIGN §3.9): any value passes the schema. */
+/**
+ * A metadata field parsed leniently by the service (DESIGN §3.9): any value passes the schema. Like every `?` request
+ * field it may be omitted or `null` (API §1.3), which `z.unknown()` does not say by itself in OpenAPI.
+ */
 function lenient(doc: Readonly<Record<string, unknown>>, description: string) {
   return z
     .unknown()
     .optional()
-    .meta({ ...doc, description: `${description} Parsed leniently: an invalid value becomes null (DESIGN §3.9).` });
+    .meta({
+      ...doc,
+      nullable: true,
+      description: `${description} Parsed leniently: an invalid value becomes null (DESIGN §3.9).`,
+    });
 }
 
 /**

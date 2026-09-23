@@ -154,6 +154,22 @@ describe("OpenAPI document", () => {
     }
   });
 
+  test("API §1.3: every optional property of a request component is nullable (omitted or null)", () => {
+    const schemas = (doc.components as { schemas: Record<string, Json> }).schemas;
+    const requests = CONTRACT_COMPONENTS.filter((component) => component.direction === "request");
+    let checked = 0;
+    for (const { id } of requests) {
+      const schema = schemas[id] as { properties?: Record<string, Json>; required?: string[] };
+      const required = new Set(schema.required ?? []);
+      for (const [name, property] of Object.entries(schema.properties ?? {})) {
+        if (required.has(name)) continue;
+        checked += 1;
+        assert.equal(property.nullable, true, `${id}.${name}: ${JSON.stringify(property)}`);
+      }
+    }
+    assert.ok(checked > 10);
+  });
+
   test("components are exactly the contract; every $ref resolves; no additionalProperties: false", () => {
     const schemas = (doc.components as { schemas: Json }).schemas;
     assert.deepEqual(Object.keys(schemas), CONTRACT_COMPONENTS.map((component) => component.id).sort());
