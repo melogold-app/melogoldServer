@@ -310,7 +310,7 @@ M0 ──┬── T1.1 ─┐
 - [ ] Все 38 маршрутов реализованы, заглушек 501 не осталось (контрактный тест).
 - [ ] Регрессионные тесты замечаний ревью зелёные на обоих диалектах: B1, M3–M6, M10–M16, m3, m18.
 - [ ] Образ меньше 80 МБ, amd64 и arm64, smoke и e2e установщика зелёные.
-- [ ] `openapi.json` релиза опубликован. Клиенты генерируют код: Fabrikt (Kotlin), swift-openapi-generator (Swift), NSwag (C#), progenitor (Rust).
+- [ ] `openapi.json` релиза опубликован. Клиенты генерируют код: Fabrikt (Kotlin), swift-openapi-generator (Swift), NSwag (C#), progenitor (Rust). До публикации каждый из четырёх генераторов проверен на декодировании `null` в полях `nullable` + `allOf: [$ref]` (API §1.3) и целых больше 2³¹−1 (`format: int64`).
 - [ ] Официальный сервер работает на `v0.1.0` с PostgreSQL 18. Off-site бэкапы, restore-check и мониторинг зелёные. Восстановление из бэкапа отрепетировано на Mac.
 - [ ] `docs/self-hosting.md` проверен вживую: `curl -fsSL https://get.melogold.app | sh` в режимах `domain`, `lan`, `proxy` на чистой ВМ и на arm64.
 - [ ] Вопросы DESIGN §12 закрыты:

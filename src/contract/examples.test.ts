@@ -54,6 +54,11 @@ const RENDERED: Record<string, JsonSchema> = (() => {
   return z.toJSONSchema(registry, { target: "openapi-3.0", io: "output", uri }).schemas as Record<string, JsonSchema>;
 })();
 
+/**
+ * Deliberately lenient in one place: `null` passes a schema with `nullable: true` **before** its `allOf` is looked at.
+ * That is the convention of API §1.3 for a nullable component (`{type: object, nullable: true, allOf: [{$ref}]}`);
+ * a literal OpenAPI 3.0.3 validator would evaluate the `allOf` and reject `null` (the zod schemas accept it).
+ */
 function documentedViolations(value: unknown, schema: JsonSchema, path: string, out: string[]): void {
   if (schema.$ref !== undefined) {
     const target = RENDERED[schema.$ref.replace("#/components/schemas/", "")];

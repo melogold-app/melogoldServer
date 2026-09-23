@@ -221,6 +221,31 @@ describe("OpenAPI document", () => {
     }
   });
 
+  test("API §1.3: a nullable component is {type: object, nullable: true, allOf: [one $ref]}; $ref has no siblings", () => {
+    const schemas: { where: string; schema: Json }[] = [];
+    const walk = (node: unknown, where: string) => {
+      if (Array.isArray(node)) node.forEach((item, index) => walk(item, `${where}/${index}`));
+      else if (typeof node === "object" && node !== null) {
+        schemas.push({ where, schema: node as Json });
+        for (const [key, value] of Object.entries(node)) walk(value, `${where}/${key}`);
+      }
+    };
+    walk(doc.components, "#/components");
+    let nullableReferences = 0;
+    for (const { where, schema } of schemas) {
+      if (typeof schema.$ref === "string") assert.deepEqual(Object.keys(schema), ["$ref"], where);
+      if (schema.allOf === undefined) continue;
+      const allOf = schema.allOf as Json[];
+      assert.equal(allOf.length, 1, where);
+      assert.deepEqual(Object.keys(allOf[0] ?? {}), ["$ref"], where);
+      if (schema.nullable === true) {
+        nullableReferences += 1;
+        assert.equal(schema.type, "object", where);
+      }
+    }
+    assert.equal(nullableReferences, 14);
+  });
+
   test("components are exactly the contract; every $ref resolves; no additionalProperties: false", () => {
     const schemas = (doc.components as { schemas: Json }).schemas;
     assert.deepEqual(Object.keys(schemas), CONTRACT_COMPONENTS.map((component) => component.id).sort());
