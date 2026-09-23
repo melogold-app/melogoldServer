@@ -19,6 +19,12 @@ export type { SqlDialect } from "./ddl.ts";
 export type { Database } from "./types.ts";
 export type { TxRunner } from "./tx.ts";
 
+/**
+ * What repositories and shared helpers receive as `q`: a transaction of `db.read`/`db.write` (or the handle of
+ * `db.run`). Code outside `src/db/**` may not import `kysely` (ESLint), so it names the type through this alias.
+ */
+export type Queryable = Kysely<Database>;
+
 /** The part of the environment the database layer reads (API §10). */
 export type DbEnv = Pick<
   Env,
