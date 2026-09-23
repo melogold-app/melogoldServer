@@ -13,8 +13,9 @@ import { join } from "node:path";
 import pg from "pg";
 import { parseEnv } from "../config/env.ts";
 import type { Env } from "../config/env.ts";
-import { openKysely } from "../db/index.ts";
-import type { OpenedKysely, OpenKyselyOptions, SqlDialect } from "../db/index.ts";
+import { dbFromKysely, openKysely, silentDbLogger } from "../db/index.ts";
+import type { Database, Db, DbOptions, OpenedKysely, OpenKyselyOptions, SqlDialect } from "../db/index.ts";
+import { migrateToLatest } from "../db/migrate.ts";
 
 function readTestDialect(): SqlDialect {
   const value = process.env.TEST_DB ?? "sqlite";
@@ -41,6 +42,8 @@ export type TestDatabase = Readonly<{
   location: string;
   /** Opens one more independent connection (pool) to the same database: "another process". */
   openKysely<DB>(options?: Omit<OpenKyselyOptions, "searchPath">): OpenedKysely<DB>;
+  /** Opens `ctx.db` (`createDb`) on the same database, over its own connection (pool). */
+  openDb(options?: DbOptions): Db;
   /** Drops the schema or deletes the directory. Close every Kysely instance first. */
   cleanup(): Promise<void>;
 }>;
@@ -61,6 +64,7 @@ export async function createTestDatabase(options: CreateTestDatabaseOptions = {}
       searchPath: undefined,
       location: file,
       openKysely: <DB>(openOptions: Omit<OpenKyselyOptions, "searchPath"> = {}) => openKysely<DB>(env, openOptions),
+      openDb: (dbOptions: DbOptions = {}) => dbFromKysely(openKysely<Database>(env, dbOptions), dbOptions),
       cleanup: () => {
         rmSync(directory, { recursive: true, force: true });
         return Promise.resolve();
@@ -85,6 +89,8 @@ export async function createTestDatabase(options: CreateTestDatabaseOptions = {}
     location: schema,
     openKysely: <DB>(openOptions: Omit<OpenKyselyOptions, "searchPath"> = {}) =>
       openKysely<DB>(env, { ...openOptions, searchPath: schema }),
+    openDb: (dbOptions: DbOptions = {}) =>
+      dbFromKysely(openKysely<Database>(env, { ...dbOptions, searchPath: schema }), dbOptions),
     cleanup: async () => {
       const client = new pg.Client({ connectionString: url });
       await client.connect();
@@ -95,4 +101,22 @@ export async function createTestDatabase(options: CreateTestDatabaseOptions = {}
       }
     },
   });
+}
+
+/** A test database with every migration applied, and `ctx.db` opened on it. Close `db` before `cleanup()`. */
+export type MigratedTestDatabase = Readonly<{ database: TestDatabase; db: Db }>;
+
+export async function createMigratedTestDatabase(
+  options: CreateTestDatabaseOptions & Readonly<{ db?: DbOptions }> = {},
+): Promise<MigratedTestDatabase> {
+  const database = await createTestDatabase(options);
+  const db = database.openDb(options.db);
+  try {
+    await migrateToLatest(db, { log: silentDbLogger });
+  } catch (error) {
+    await db.destroy();
+    await database.cleanup();
+    throw error;
+  }
+  return Object.freeze({ database, db });
 }

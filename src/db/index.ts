@@ -1,5 +1,7 @@
 /**
- * Database layer entry point (DESIGN §6.2, docs/database.md): opens the dialect chosen by `DATABASE_URL`.
+ * Database layer entry point (DESIGN §6.2, docs/database.md): opens the dialect chosen by `DATABASE_URL` and exposes
+ * `db.read`/`db.write`/`db.run` ({@link createDb}). Migrations and the schema check live in `migrate.ts` and
+ * `schema-check.ts`.
  */
 import { Kysely } from "kysely";
 import type { KyselyPlugin } from "kysely";
@@ -7,9 +9,15 @@ import type { Env } from "../config/env.ts";
 import type { SqlDialect } from "./ddl.ts";
 import { createPostgresDialect, createPostgresPool } from "./dialect-postgres.ts";
 import { createSqliteDialect, openSqlite } from "./dialect-sqlite.ts";
+import { ensureHead } from "./heads.ts";
 import { StatementCounterPlugin, StripRowLocksPlugin } from "./plugins.ts";
+import { createTxRunner } from "./tx.ts";
+import type { TxRunner } from "./tx.ts";
+import type { Database } from "./types.ts";
 
 export type { SqlDialect } from "./ddl.ts";
+export type { Database } from "./types.ts";
+export type { TxRunner } from "./tx.ts";
 
 /** The part of the environment the database layer reads (API §10). */
 export type DbEnv = Pick<
@@ -43,7 +51,7 @@ export type OpenedKysely<DB> = Readonly<{ dialect: SqlDialect; kysely: Kysely<DB
 
 /**
  * Opens a Kysely instance for `DATABASE_URL` with the dialect specifics of API §9.4 and the layer's plugins. Most
- * code uses `createDb` instead; this is for tools that work below `db.read`/`db.write` (migrations, tests).
+ * code uses {@link createDb} instead; this is for tools that work below `db.read`/`db.write` (tests, tooling).
  */
 export function openKysely<DB>(env: DbEnv, options: OpenKyselyOptions = {}): OpenedKysely<DB> {
   const log = options.log ?? silentDbLogger;
@@ -74,4 +82,49 @@ export function openKysely<DB>(env: DbEnv, options: OpenKyselyOptions = {}): Ope
   });
   const kysely = new Kysely<DB>({ dialect: createPostgresDialect(pool), plugins: [counter] });
   return Object.freeze({ dialect: "postgres", kysely });
+}
+
+/**
+ * The application's database handle (`ctx.db`): `read`, `write` and `run` of `tx.ts`, with the missing-head retry of
+ * API §9.5 wired to `ensureHead`.
+ */
+export type Db = TxRunner<Database> &
+  Readonly<{
+    dialect: SqlDialect;
+    /**
+     * The Kysely instance below the transaction runner, for tooling only (migrations, the schema check, tests).
+     * Services and repositories always go through `read`/`write`/`run`.
+     */
+    kysely: Kysely<Database>;
+    /** Closes the pool or the SQLite file. */
+    destroy(): Promise<void>;
+  }>;
+
+export type DbOptions = Readonly<{
+  log?: DbLogger;
+  /** Epoch milliseconds for `ensureHead` (the application's clock; default `Date.now`). */
+  now?: () => number;
+  /** Transactions longer than this are logged (default 2 s, DESIGN §6.2). */
+  slowMs?: number;
+}>;
+
+/** Wraps an opened Kysely instance into {@link Db}; `createDb` and tests use it. */
+export function dbFromKysely(opened: OpenedKysely<Database>, options: DbOptions = {}): Db {
+  const now = options.now ?? Date.now;
+  const runner: TxRunner<Database> = createTxRunner(opened.kysely, {
+    ...(options.log ? { log: options.log } : {}),
+    ...(options.slowMs === undefined ? {} : { slowMs: options.slowMs }),
+    ensureHead: (userId) => ensureHead(runner, userId, now()),
+  });
+  return Object.freeze({
+    ...runner,
+    dialect: opened.dialect,
+    kysely: opened.kysely,
+    destroy: () => opened.kysely.destroy(),
+  });
+}
+
+/** Opens the database of `DATABASE_URL` (API §9.4) and returns `ctx.db`. */
+export function createDb(env: DbEnv, options: DbOptions & OpenKyselyOptions = {}): Db {
+  return dbFromKysely(openKysely<Database>(env, options), options);
 }
