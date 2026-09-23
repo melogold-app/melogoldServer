@@ -399,10 +399,17 @@ describe(`schema check (${TEST_DIALECT})`, () => {
 });
 
 describe(`ID collation (${TEST_DIALECT}, M10)`, () => {
-  test("sync_playlist_items joins sync_tracks by video_id and orders by sort_key byte-wise", async () => {
+  test("sync_playlist_items joins sync_tracks by video_id; sort_key and video_id order byte-wise", async () => {
     await withMigratedDb(async (db) => {
       const now = 1_700_000_000_000;
-      const video = (suffix: string) => `vid_${suffix}`.padEnd(11, "x");
+      // Video ids whose byte order (B Z _ a) differs from the en_US.UTF-8 order (a B _ Z).
+      const VIDEO_IDS: Readonly<Record<string, string>> = {
+        "1": "avid0000001",
+        "2": "Bvid0000002",
+        "3": "_vid0000003",
+        "4": "Zvid0000004",
+      };
+      const video = (suffix: string) => VIDEO_IDS[suffix] ?? "";
       await db.write(async (q) => {
         await q
           .insertInto("users")
@@ -482,6 +489,40 @@ describe(`ID collation (${TEST_DIALECT}, M10)`, () => {
         rows.map((row) => row.title),
         ["T2", "T4", "T3", "T1"],
       );
+
+      // The join key itself orders byte-wise: a video_id column without COLLATE "C" would still join (the default
+      // collation yields to "C"), but would sort by the database locale.
+      const byVideo = await db.read((q) =>
+        q
+          .selectFrom("sync_playlist_items as i")
+          .innerJoin("sync_tracks as t", (join) =>
+            join.onRef("t.user_id", "=", "i.user_id").onRef("t.video_id", "=", "i.video_id"),
+          )
+          .select("t.video_id")
+          .where("i.user_id", "=", "u1")
+          .orderBy("t.video_id")
+          .execute(),
+      );
+      assert.deepEqual(
+        byVideo.map((row) => row.video_id),
+        ["Bvid0000002", "Zvid0000004", "_vid0000003", "avid0000001"],
+      );
+    });
+  });
+
+  test('PG: both join columns are COLLATE "C"', { skip: TEST_DIALECT !== "postgres" }, async () => {
+    await withMigratedDb(async (db) => {
+      const { rows } = await sql<{ table: string; collation: string | null }>`
+        SELECT table_name AS "table", collation_name AS collation
+        FROM information_schema.columns
+        WHERE table_schema = current_schema() AND column_name = 'video_id'
+          AND table_name IN ('sync_playlist_items', 'sync_tracks')
+        ORDER BY table_name
+      `.execute(db.kysely);
+      assert.deepEqual(rows, [
+        { table: "sync_playlist_items", collation: "C" },
+        { table: "sync_tracks", collation: "C" },
+      ]);
     });
   });
 });
