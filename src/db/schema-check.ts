@@ -263,7 +263,7 @@ async function introspectPostgres(kysely: QueryExecutorProvider): Promise<LiveSc
           columns: splitColumns(row.columns),
           table: row.refTable ?? "",
           references: splitColumns(row.refColumns),
-          onDelete: PG_ON_DELETE[row.onDelete] ?? row.onDelete,
+          onDelete: row.onDelete in PG_ON_DELETE ? (PG_ON_DELETE[row.onDelete] ?? null) : row.onDelete,
         })),
       // `CHECK (<expression>)`, possibly followed by `NOT VALID`.
       checks: own

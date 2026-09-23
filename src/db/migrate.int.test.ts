@@ -299,6 +299,43 @@ describe(`schema check (${TEST_DIALECT})`, () => {
     });
   });
 
+  test("a foreign key without ON DELETE (NO ACTION) matches a snapshot entry with onDelete null", async () => {
+    await withMigratedDb(async (db) => {
+      const run = (statement: string) => sql.raw(statement).execute(db.kysely);
+      if (TEST_DIALECT === "postgres") {
+        await run(`CREATE TABLE fk_parent (id text COLLATE "C" NOT NULL PRIMARY KEY)`);
+        await run(
+          `CREATE TABLE fk_child (id text COLLATE "C" NOT NULL PRIMARY KEY, parent_id text COLLATE "C" NULL REFERENCES fk_parent(id))`,
+        );
+      } else {
+        await run("CREATE TABLE fk_parent (id TEXT NOT NULL PRIMARY KEY) STRICT");
+        await run(
+          "CREATE TABLE fk_child (id TEXT NOT NULL PRIMARY KEY, parent_id TEXT NULL REFERENCES fk_parent(id)) STRICT",
+        );
+      }
+      const live = await introspectSchema(db.kysely, db.dialect);
+      assert.deepEqual(live.tables.get("fk_child")?.foreignKeys, [
+        { columns: ["parent_id"], table: "fk_parent", references: ["id"], onDelete: null },
+      ]);
+      const snapshot = loadSchemaSnapshot();
+      const table = { unique: [], foreignKeys: [], checks: [], indexes: [], primaryKey: ["id"] };
+      const id = { name: "id", type: "ID", nullable: false } as const;
+      const withTables: typeof snapshot = {
+        ...snapshot,
+        tables: {
+          ...snapshot.tables,
+          fk_parent: { ...table, columns: [id] },
+          fk_child: {
+            ...table,
+            columns: [id, { name: "parent_id", type: "ID", nullable: true }],
+            foreignKeys: [{ columns: ["parent_id"], table: "fk_parent", references: ["id"], onDelete: null }],
+          },
+        },
+      };
+      assert.deepEqual(compareSchema(withTables, live, db.dialect), { problems: [], extras: [] });
+    });
+  });
+
   test("database newer than the code: a warning, no migrations, unknown columns tolerated", async () => {
     await withMigratedDb(async (db) => {
       await recordUnknownMigration(db, "0006_future");
