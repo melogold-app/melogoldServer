@@ -1,8 +1,6 @@
 /**
  * Routes of the `devices` module (API §4.4, T1.2): list, rename, revoke one, revoke the others. The 403 rules are the
- * matrix of DESIGN §4.8 (`src/modules/security/policy.ts`).
- *
- * M0: development stubs with their complete schemas (PLAN step 0.8); every handler answers `501 not_implemented`.
+ * matrix of DESIGN §4.8 (`src/modules/security/policy.ts`); the logic is in `devices.service.ts`.
  */
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -16,9 +14,11 @@ import {
   RevokeOthersRequest,
   RevokeOthersResponse,
 } from "../../contract/devices.ts";
-import { notImplemented, operation } from "../../http/operation.ts";
+import { requireAuth } from "../../http/auth-guard.ts";
+import { operation } from "../../http/operation.ts";
+import { listDevices, renameDevice, revokeDevice, revokeOtherDevices } from "./devices.service.ts";
 
-export function registerDevicesRoutes(app: FastifyInstance, _ctx: AppContext): void {
+export function registerDevicesRoutes(app: FastifyInstance, ctx: AppContext): void {
   const routes = app.withTypeProvider<ZodTypeProvider>();
 
   routes.get(
@@ -33,7 +33,7 @@ export function registerDevicesRoutes(app: FastifyInstance, _ctx: AppContext): v
         response: DeviceListResponse,
       }),
     },
-    notImplemented,
+    (request) => listDevices(ctx, requireAuth(request)),
   );
 
   routes.patch(
@@ -53,7 +53,12 @@ export function registerDevicesRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["invalid_password", "recent_device_restricted", "device_not_found", "reauth_throttled"],
       }),
     },
-    notImplemented,
+    (request) =>
+      renameDevice(ctx, requireAuth(request), {
+        deviceId: request.params.deviceId,
+        name: request.body.name,
+        password: request.body.password,
+      }),
   );
 
   routes.post(
@@ -78,7 +83,13 @@ export function registerDevicesRoutes(app: FastifyInstance, _ctx: AppContext): v
         ],
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      await revokeDevice(ctx, requireAuth(request), {
+        deviceId: request.params.deviceId,
+        password: request.body.password,
+      });
+      return reply.code(204).send();
+    },
   );
 
   routes.post(
@@ -95,6 +106,6 @@ export function registerDevicesRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["invalid_password", "recent_device_restricted", "reauth_throttled"],
       }),
     },
-    notImplemented,
+    (request) => revokeOtherDevices(ctx, requireAuth(request), { password: request.body.password }),
   );
 }
