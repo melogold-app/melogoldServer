@@ -132,6 +132,40 @@ describe(`transactions (${TEST_DIALECT})`, () => {
     assert.equal(await valueOf("outer"), undefined);
   });
 
+  test("after the call ends its scope is closed: a timer created inside a committed write can use the database", async () => {
+    // While the transaction is open, a timer created inside it is still nested.
+    await tx.write(async () => {
+      const inside = await new Promise<unknown>((resolve) => {
+        setTimeout(() => {
+          tx.write(() => Promise.resolve()).then(resolve, resolve);
+        }, 5);
+      });
+      assert.ok(inside instanceof NestedDbAccessError);
+    });
+    // Once it has committed, the same kind of timer is not.
+    const later = Promise.withResolvers<unknown>();
+    await tx.write(async (q) => {
+      await q.insertInto("items").values({ id: "t", value: 1 }).execute();
+      setTimeout(() => {
+        tx.write((inner) => inner.updateTable("items").set({ value: 2 }).where("id", "=", "t").execute()).then(
+          later.resolve,
+          later.reject,
+        );
+      }, 30);
+    });
+    await later.promise;
+    assert.equal(await valueOf("t"), 2);
+    // The same after a read, for run.
+    const fromRead = Promise.withResolvers<unknown>();
+    await tx.read(() => {
+      setTimeout(() => {
+        tx.run((q) => q.selectFrom("items").select("id").execute()).then(fromRead.resolve, fromRead.reject);
+      }, 10);
+      return Promise.resolve();
+    });
+    assert.deepEqual(await fromRead.promise, [{ id: "t" }]);
+  });
+
   test("ON CONFLICT inside write does not break the transaction", async () => {
     await tx.write((q) => q.insertInto("items").values({ id: "dup", value: 1 }).execute());
     const inserted = await tx.write(async (q) => {

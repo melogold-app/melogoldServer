@@ -9,7 +9,9 @@
  *
  * **No nesting.** A `read`/`write`/`run` started inside another one throws {@link NestedDbAccessError}: SQLite has one
  * connection behind a mutex, so the inner call would wait forever for the outer one. The check uses
- * `AsyncLocalStorage`, so it also catches calls made deep inside services.
+ * `AsyncLocalStorage`, so it also catches calls made deep inside services. The scope is closed when the call ends:
+ * a timer or listener created inside a transaction keeps the async context, but once that transaction is over its
+ * `db.*` calls are not nested and run normally.
  *
  * **Missing head.** `lockUser`/`readHead` throw {@link MissingHeadError} when `sync_heads` has no row for the user.
  * The runner then rolls back, creates the row in a short write transaction (`ensureHead`, API §9.5) and runs the
@@ -31,13 +33,16 @@ export type TxScope = {
   /** Statements executed so far (counted by `StatementCounterPlugin`). */
   statements: number;
   savepoints: number;
+  /** Set when the call has ended; async resources created inside it still see the scope, which then means nothing. */
+  closed: boolean;
 };
 
 const scopes = new AsyncLocalStorage<TxScope>();
 
-/** The database access this code runs inside, if any. */
+/** The database access this code runs inside, if any (a scope whose call has ended is no scope). */
 export function currentTxScope(): TxScope | undefined {
-  return scopes.getStore();
+  const scope = scopes.getStore();
+  return scope?.closed === false ? scope : undefined;
 }
 
 export class NestedDbAccessError extends Error {
@@ -71,7 +76,7 @@ export class TxRuleError extends Error {
 
 /** Throws when called inside `db.read`/`db.write`/`db.run` (used by the migration runner and similar tools). */
 export function assertOutsideTx(what: TxKind | "migrate"): void {
-  const outer = scopes.getStore();
+  const outer = currentTxScope();
   if (outer) throw new NestedDbAccessError(what, outer.kind);
 }
 
@@ -80,7 +85,7 @@ export function assertOutsideTx(what: TxKind | "migrate"): void {
  * @param what the helper's name for the message.
  */
 export function assertFirstStatementOfWrite(what: string): void {
-  const scope = scopes.getStore();
+  const scope = currentTxScope();
   if (scope?.kind !== "write") throw new TxRuleError(`${what} must be called inside db.write`);
   if (scope.statements !== 0) {
     throw new TxRuleError(`${what} must be the first statement of the transaction (${scope.statements} ran before)`);
@@ -116,11 +121,12 @@ export function createTxRunner<DB>(kysely: Kysely<DB>, options: TxRunnerOptions 
 
   async function inScope<T>(kind: TxKind, body: () => Promise<T>): Promise<T> {
     assertOutsideTx(kind);
-    const scope: TxScope = { kind, statements: 0, savepoints: 0 };
+    const scope: TxScope = { kind, statements: 0, savepoints: 0, closed: false };
     const started = performance.now();
     try {
       return await scopes.run(scope, body);
     } finally {
+      scope.closed = true;
       const durationMs = Math.round(performance.now() - started);
       if (durationMs > slowMs) {
         log?.warn({ kind, durationMs, statements: scope.statements }, "slow database transaction");
@@ -162,7 +168,7 @@ export function createTxRunner<DB>(kysely: Kysely<DB>, options: TxRunnerOptions 
  * 25P02). This is the escape hatch of docs/database.md; `ON CONFLICT` is preferred wherever it works.
  */
 export async function withSavepoint<DB, T>(q: Transaction<DB>, fn: () => Promise<T>): Promise<T> {
-  const scope = scopes.getStore();
+  const scope = currentTxScope();
   if (scope?.kind !== "write") throw new TxRuleError("withSavepoint must be called inside db.write");
   scope.savepoints += 1;
   const name = sql.id(`melogold_sp_${scope.savepoints}`);
