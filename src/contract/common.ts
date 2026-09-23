@@ -119,9 +119,30 @@ export function optional<T extends z.ZodType>(schema: T) {
   return schema.nullish().transform((value) => value ?? undefined);
 }
 
-/** A request integer in `min..max` (API §1.4: integers only, never above 2^53 − 1). */
+/**
+ * The OpenAPI `format` of an integer whose largest value is `maximum`: `int32` when it fits API §1.4 `Int32`,
+ * `int64` otherwise (values up to 2^53 − 1). Code generators map an integer without a format to a 32-bit type, so
+ * every integer of the contract carries one.
+ */
+export function integerFormat(maximum: number): "int32" | "int64" {
+  return maximum <= INT32_MAX ? "int32" : "int64";
+}
+
+/** A request integer in `min..max` (API §1.4: integers only, never above 2^53 − 1), checked by the schema. */
 export function int(min: number, max: number = Number.MAX_SAFE_INTEGER) {
-  return z.int().min(min).max(max);
+  return z
+    .int()
+    .min(min)
+    .max(max)
+    .meta({ format: integerFormat(max) });
+}
+
+/**
+ * An integer whose range is documented in OpenAPI but not checked by the schema: responses (see the module comment)
+ * and the per-kind fields of `SyncOp`. The schema checks only that it is a safe integer.
+ */
+export function intRange(minimum: number, maximum: number = Number.MAX_SAFE_INTEGER) {
+  return z.int().meta({ minimum, maximum, format: integerFormat(maximum) });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -291,10 +312,10 @@ export const IsoOut = z.string().meta({
 });
 export const CursorOut = z.string().meta({ description: "Opaque cursor (API §1.6)." });
 export const HttpUrlOut = z.string().meta({ maxLength: STRING_LIMITS.url, pattern: HTTP_URL_PATTERN.source });
-/** A response integer (API §1.4: integers only, at most 2^53 − 1). */
-export const IntOut = z.int();
-/** A response `Int32`. */
-export const Int32Out = z.int().meta({ maximum: INT32_MAX });
+/** A response integer (API §1.4: at most 2^53 − 1, `int64`). No integer of the API is negative. */
+export const IntOut = intRange(0);
+/** A response `Int32` (`int32`). */
+export const Int32Out = intRange(0, INT32_MAX);
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Errors (API §2.1)
@@ -405,7 +426,10 @@ export const TrackInput = z
     ),
     albumId: lenient({ type: "string", pattern: BROWSE_ID_PATTERN.source }, "BrowseId."),
     albumTitle: lenient({ type: "string", maxLength: STRING_LIMITS.title }, "Truncated to 500."),
-    durationMs: lenient({ type: "integer", maximum: INT32_MAX }, "Int32."),
+    durationMs: lenient(
+      { type: "integer", format: integerFormat(INT32_MAX), minimum: 0, maximum: INT32_MAX },
+      "Int32, milliseconds.",
+    ),
     durationText: lenient({ type: "string", maxLength: STRING_LIMITS.durationText }, '"3:33", "1:02:03".'),
     thumbnailUrl: lenient(
       { type: "string", maxLength: STRING_LIMITS.url, pattern: HTTP_URL_PATTERN.source },

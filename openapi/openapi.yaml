@@ -2526,12 +2526,14 @@ components:
           nullable: true
           description: "`null`: no limit."
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 2147483647
+          format: int32
         newDeviceRestrictHours:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         login:
           $ref: "#/components/schemas/LoginLimits"
         password:
@@ -2604,8 +2606,9 @@ components:
           type: string
         signedOutDevices:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
           description: "recover: how many devices were removed; otherwise 0."
       required:
         - user
@@ -2626,6 +2629,7 @@ components:
           type: integer
           minimum: 1
           maximum: 9007199254740991
+          format: int64
       required:
         - videoId
         - totalMs
@@ -2729,8 +2733,9 @@ components:
           $ref: "#/components/schemas/TokenPair"
         signedOutDevices:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - user
         - tokens
@@ -2912,8 +2917,9 @@ components:
       properties:
         version:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         modes:
           type: array
           items:
@@ -2921,12 +2927,14 @@ components:
           description: "Known values: request, invite."
         ttlSeconds:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         longPollSeconds:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - version
         - modes
@@ -2944,8 +2952,9 @@ components:
           nullable: true
           description: "`null`: no limit."
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 2147483647
+          format: int32
       required:
         - devices
         - maxDevices
@@ -3016,8 +3025,9 @@ components:
       properties:
         statusCode:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         error:
           type: string
           description: Same text as `message` (Clementine shape).
@@ -3031,36 +3041,43 @@ components:
             Clients must accept unknown codes.
         retryAfterSeconds:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         issues:
           type: array
           items:
             $ref: "#/components/schemas/ValidationIssue"
         minLength:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxLength:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         deviceLimit:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         deviceCount:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         minProtocol:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxProtocol:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         floorCursor:
           type: string
           description: Opaque cursor (API §1.6).
@@ -3102,8 +3119,9 @@ components:
           description: Always "melogold-export".
         formatVersion:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
           description: "1"
         exportedAt:
           type: string
@@ -3259,8 +3277,9 @@ components:
       properties:
         version:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - version
     HealthResponse:
@@ -3285,16 +3304,19 @@ components:
       properties:
         retentionDays:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxEvents:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         mergeUploadMax:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - retentionDays
         - maxEvents
@@ -3364,8 +3386,9 @@ components:
           description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
         longPollSeconds:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - linkId
         - status
@@ -3410,8 +3433,9 @@ components:
           description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
         longPollSeconds:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - linkId
         - mode
@@ -3617,12 +3641,14 @@ components:
       properties:
         minLength:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxLength:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         pattern:
           type: string
       required:
@@ -3769,8 +3795,9 @@ components:
           nullable: true
           description: For debugging.
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         playlistId:
           nullable: true
           description: "Only `redirected`: the recovery playlist."
@@ -3780,8 +3807,9 @@ components:
           nullable: true
           description: Only `op_rate_limited`.
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         replayed:
           type: boolean
       required:
@@ -3797,12 +3825,14 @@ components:
       properties:
         minLength:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxLength:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - minLength
         - maxLength
@@ -3846,8 +3876,9 @@ components:
           description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
         playTimeMs:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         deviceId:
           nullable: true
           type: string
@@ -3868,8 +3899,9 @@ components:
           description: YouTube video id.
         totalPlayTimeMs:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         lastPlayedAt:
           nullable: true
           type: string
@@ -3920,12 +3952,14 @@ components:
       properties:
         queueMax:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxBodyBytes:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - queueMax
         - maxBodyBytes
@@ -3940,6 +3974,7 @@ components:
           type: integer
           minimum: 0
           maximum: 2147483647
+          format: int32
         at:
           format: date-time
           pattern: ^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?Z$
@@ -3950,16 +3985,19 @@ components:
           type: integer
           minimum: 0
           maximum: 199
+          format: int32
           description: 0..len−1 of the queue.
         positionMs:
           type: integer
           minimum: 0
           maximum: 9007199254740991
+          format: int64
         durationMs:
           nullable: true
           type: integer
           minimum: 0
           maximum: 9007199254740991
+          format: int64
         playing:
           type: boolean
         queue:
@@ -3992,8 +4030,9 @@ components:
         rev:
           nullable: true
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         reason:
           nullable: true
           type: string
@@ -4021,8 +4060,9 @@ components:
       properties:
         rev:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
           description: max(prev.rev + 1, serverNowMs); never decreases, also after DELETE.
         deviceId:
           type: string
@@ -4038,21 +4078,25 @@ components:
           description: UUID, lowercase.
         queueVersion:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 2147483647
+          format: int32
         index:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         positionMs:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         durationMs:
           nullable: true
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         playing:
           type: boolean
         at:
@@ -4112,8 +4156,9 @@ components:
       properties:
         rev:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         deviceId:
           type: string
           pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
@@ -4127,16 +4172,19 @@ components:
           description: UUID, lowercase.
         queueVersion:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 2147483647
+          format: int32
         index:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         queueLength:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         track:
           type: object
           nullable: true
@@ -4144,13 +4192,15 @@ components:
             - $ref: "#/components/schemas/TrackDto"
         positionMs:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         durationMs:
           nullable: true
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         playing:
           type: boolean
         at:
@@ -4189,8 +4239,9 @@ components:
       properties:
         rev:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         cleared:
           type: boolean
         state:
@@ -4279,6 +4330,7 @@ components:
           type: integer
           minimum: 0
           maximum: 25
+          format: int32
         knownStatus:
           description: Answer at once when the status differs, otherwise wait up to
             waitSeconds.
@@ -4406,8 +4458,9 @@ components:
           description: "`mgpow1.<b64url>.<b64url>`, single use, TTL 10 min."
         bits:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
           description: Leading zero bits required of sha256(challenge + ':' + nonce).
         expiresAt:
           type: string
@@ -4502,8 +4555,9 @@ components:
       properties:
         revokedCount:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - revokedCount
     RotateRecoveryCodeRequest:
@@ -4551,12 +4605,14 @@ components:
           description: git sha (7)
         apiVersion:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         minApiVersion:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         serverId:
           type: string
           pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
@@ -4663,12 +4719,14 @@ components:
       properties:
         protocol:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         minProtocol:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         kinds:
           type: array
           items:
@@ -4719,76 +4777,94 @@ components:
       properties:
         maxOpsPerRequest:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxBodyBytes:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxWorkUnitsPerRequest:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         defaultPageSize:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxPageSize:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxVideoIdsPerAdd:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxVideoIdsPerList:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxBaselineEntries:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxIncludeKeys:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxPlaylists:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxPlaylistItems:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxItemsTotal:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxLikes:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxBookmarksPerType:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxTracks:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxPlayStats:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         maxPlayEvents:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         playAddPerHour:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - maxOpsPerRequest
         - maxBodyBytes
@@ -4924,6 +5000,7 @@ components:
           type: integer
           minimum: 1
           maximum: 86400000
+          format: int32
         history:
           nullable: true
           type: boolean
@@ -4975,6 +5052,7 @@ components:
           type: integer
           minimum: 1
           maximum: 2000
+          format: int32
           description: "Rows per page, default 500 (the first sync: 2000)."
         streams:
           nullable: true
@@ -5090,32 +5168,39 @@ components:
       properties:
         likes:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         albums:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         artists:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         playlists:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         items:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         plays:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         playedTracks:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - likes
         - albums
@@ -5129,12 +5214,14 @@ components:
       properties:
         heartbeatMs:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
         retryMs:
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 9007199254740991
+          format: int64
       required:
         - heartbeatMs
         - retryMs
@@ -5199,8 +5286,9 @@ components:
           nullable: true
           description: "`null`: unknown or live."
           type: integer
-          minimum: -9007199254740991
+          minimum: 0
           maximum: 2147483647
+          format: int32
         durationText:
           nullable: true
           description: '"3:33", "1:02:03".'
@@ -5277,10 +5365,12 @@ components:
             (DESIGN §3.9)."
         durationMs:
           type: integer
+          format: int32
+          minimum: 0
           maximum: 2147483647
           nullable: true
-          description: "Int32. Parsed leniently: an invalid value becomes null (DESIGN
-            §3.9)."
+          description: "Int32, milliseconds. Parsed leniently: an invalid value becomes
+            null (DESIGN §3.9)."
         durationText:
           type: string
           maxLength: 16

@@ -6,7 +6,9 @@
  * - every operation has a 4xx answer (the two health probes excepted) and every error answer is `ErrorResponse`
  *   with registered codes of that status;
  * - no inline object schemas: bodies and answers are components, every `$ref` resolves, the components are exactly
- *   the contract (`CONTRACT_COMPONENTS`, including every `*Payload` and `PlaybackSummary`).
+ *   the contract (`CONTRACT_COMPONENTS`, including every `*Payload` and `PlaybackSummary`);
+ * - every integer carries `format` (`int32` exactly when its maximum fits `Int32`, else `int64`): Fabrikt and NSwag
+ *   map an integer without a format to a 32-bit type (API §1.4, PLAN release checklist).
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -14,6 +16,7 @@ import { before, describe, test } from "node:test";
 import { generateOpenapi } from "../../../scripts/gen-openapi.ts";
 import type { OpenapiDocuments } from "../../../scripts/gen-openapi.ts";
 import { CONTRACT_COMPONENTS } from "../../contract/index.ts";
+import { INT32_MAX } from "../../contract/limits.ts";
 import { ERROR_CODES, isErrorCode } from "../../http/error-codes.ts";
 import { apiRoutes } from "./api-table.ts";
 
@@ -56,6 +59,16 @@ function refsIn(node: unknown, found: string[] = []): string[] {
       if (key === "$ref" && typeof value === "string") found.push(value);
       else refsIn(value, found);
     }
+  }
+  return found;
+}
+
+/** Every schema with `type: integer` in the document, with its JSON pointer. */
+function integerSchemas(node: unknown, where = "#", found: { where: string; schema: Json }[] = []) {
+  if (Array.isArray(node)) node.forEach((item, index) => integerSchemas(item, `${where}/${index}`, found));
+  else if (typeof node === "object" && node !== null) {
+    if ((node as Json).type === "integer") found.push({ where, schema: node as Json });
+    for (const [key, value] of Object.entries(node)) integerSchemas(value, `${where}/${key}`, found);
   }
   return found;
 }
@@ -168,6 +181,44 @@ describe("OpenAPI document", () => {
       }
     }
     assert.ok(checked > 10);
+  });
+
+  test("API §1.4: every integer has a format, int32 exactly when its maximum fits Int32, and no negative minimum", () => {
+    const integers = integerSchemas(doc);
+    assert.ok(integers.length > 80, `${integers.length} integers`);
+    for (const { where, schema } of integers) {
+      const detail = `${where}: ${JSON.stringify(schema)}`;
+      assert.ok(schema.format === "int32" || schema.format === "int64", detail);
+      assert.equal(typeof schema.maximum, "number", detail);
+      const maximum = schema.maximum as number;
+      assert.ok(maximum <= Number.MAX_SAFE_INTEGER, detail);
+      assert.equal(schema.format === "int32", maximum <= INT32_MAX, detail);
+      assert.equal(typeof schema.minimum, "number", detail);
+      assert.ok((schema.minimum as number) >= 0, detail);
+    }
+    const format = (component: string, property: string) =>
+      integers.find(({ where }) => where === `#/components/schemas/${component}/properties/${property}`)?.schema.format;
+    // API §4.9 example: rev 1790157600000 does not fit 32 bits.
+    for (const [component, property] of [
+      ["PlaybackState", "rev"],
+      ["PlaybackPutResult", "rev"],
+      ["PlaybackUpdatedPayload", "rev"],
+      ["PlaybackSummary", "rev"],
+      ["OpResult", "seq"],
+      ["PlayStatRow", "totalPlayTimeMs"],
+      ["PlaybackState", "positionMs"],
+      ["PlaybackPut", "positionMs"],
+      ["BaselineEntry", "totalMs"],
+    ] as const) {
+      assert.equal(format(component, property), "int64", `${component}.${property}`);
+    }
+    for (const [component, property] of [
+      ["TrackDto", "durationMs"],
+      ["PlaybackPut", "queueVersion"],
+      ["PlaybackState", "queueVersion"],
+    ] as const) {
+      assert.equal(format(component, property), "int32", `${component}.${property}`);
+    }
   });
 
   test("components are exactly the contract; every $ref resolves; no additionalProperties: false", () => {

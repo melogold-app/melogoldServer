@@ -3768,13 +3768,15 @@
             "nullable": true,
             "description": "`null`: no limit.",
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 2147483647,
+            "format": "int32"
           },
           "newDeviceRestrictHours": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "login": {
             "$ref": "#/components/schemas/LoginLimits"
@@ -3871,8 +3873,9 @@
           },
           "signedOutDevices": {
             "type": "integer",
-            "minimum": -9007199254740991,
+            "minimum": 0,
             "maximum": 9007199254740991,
+            "format": "int64",
             "description": "recover: how many devices were removed; otherwise 0."
           }
         },
@@ -3897,7 +3900,8 @@
           "totalMs": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 9007199254740991
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -4030,8 +4034,9 @@
           },
           "signedOutDevices": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -4256,8 +4261,9 @@
         "properties": {
           "version": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "modes": {
             "type": "array",
@@ -4268,13 +4274,15 @@
           },
           "ttlSeconds": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "longPollSeconds": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -4298,8 +4306,9 @@
             "nullable": true,
             "description": "`null`: no limit.",
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 2147483647,
+            "format": "int32"
           }
         },
         "required": [
@@ -4390,8 +4399,9 @@
         "properties": {
           "statusCode": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "error": {
             "type": "string",
@@ -4407,8 +4417,9 @@
           },
           "retryAfterSeconds": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "issues": {
             "type": "array",
@@ -4418,33 +4429,39 @@
           },
           "minLength": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxLength": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "deviceLimit": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "deviceCount": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "minProtocol": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxProtocol": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "floorCursor": {
             "type": "string",
@@ -4499,8 +4516,9 @@
           },
           "formatVersion": {
             "type": "integer",
-            "minimum": -9007199254740991,
+            "minimum": 0,
             "maximum": 9007199254740991,
+            "format": "int64",
             "description": "1"
           },
           "exportedAt": {
@@ -4711,8 +4729,9 @@
         "properties": {
           "version": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -4746,18 +4765,21 @@
         "properties": {
           "retentionDays": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxEvents": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "mergeUploadMax": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -4852,8 +4874,9 @@
           },
           "longPollSeconds": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -4908,8 +4931,9 @@
           },
           "longPollSeconds": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -5175,13 +5199,15 @@
         "properties": {
           "minLength": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxLength": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "pattern": {
             "type": "string"
@@ -5370,8 +5396,9 @@
             "nullable": true,
             "description": "For debugging.",
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "playlistId": {
             "nullable": true,
@@ -5383,8 +5410,9 @@
             "nullable": true,
             "description": "Only `op_rate_limited`.",
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "replayed": {
             "type": "boolean"
@@ -5405,13 +5433,15 @@
         "properties": {
           "minLength": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxLength": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -5468,8 +5498,9 @@
           },
           "playTimeMs": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "deviceId": {
             "nullable": true,
@@ -5496,8 +5527,9 @@
           },
           "totalPlayTimeMs": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "lastPlayedAt": {
             "nullable": true,
@@ -5564,13 +5596,15 @@
         "properties": {
           "queueMax": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxBodyBytes": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -5589,7 +5623,8 @@
           "queueVersion": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 2147483647
+            "maximum": 2147483647,
+            "format": "int32"
           },
           "at": {
             "format": "date-time",
@@ -5601,18 +5636,21 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 199,
+            "format": "int32",
             "description": "0..len−1 of the queue."
           },
           "positionMs": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 9007199254740991
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "durationMs": {
             "nullable": true,
             "type": "integer",
             "minimum": 0,
-            "maximum": 9007199254740991
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "playing": {
             "type": "boolean"
@@ -5656,8 +5694,9 @@
           "rev": {
             "nullable": true,
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "reason": {
             "nullable": true,
@@ -5694,8 +5733,9 @@
         "properties": {
           "rev": {
             "type": "integer",
-            "minimum": -9007199254740991,
+            "minimum": 0,
             "maximum": 9007199254740991,
+            "format": "int64",
             "description": "max(prev.rev + 1, serverNowMs); never decreases, also after DELETE."
           },
           "deviceId": {
@@ -5715,24 +5755,28 @@
           },
           "queueVersion": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 2147483647,
+            "format": "int32"
           },
           "index": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "positionMs": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "durationMs": {
             "nullable": true,
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "playing": {
             "type": "boolean"
@@ -5813,8 +5857,9 @@
         "properties": {
           "rev": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "deviceId": {
             "type": "string",
@@ -5832,18 +5877,21 @@
           },
           "queueVersion": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 2147483647,
+            "format": "int32"
           },
           "index": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "queueLength": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "track": {
             "type": "object",
@@ -5856,14 +5904,16 @@
           },
           "positionMs": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "durationMs": {
             "nullable": true,
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "playing": {
             "type": "boolean"
@@ -5913,8 +5963,9 @@
         "properties": {
           "rev": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "cleared": {
             "type": "boolean"
@@ -6028,7 +6079,8 @@
             "nullable": true,
             "type": "integer",
             "minimum": 0,
-            "maximum": 25
+            "maximum": 25,
+            "format": "int32"
           },
           "knownStatus": {
             "description": "Answer at once when the status differs, otherwise wait up to waitSeconds.",
@@ -6190,8 +6242,9 @@
           },
           "bits": {
             "type": "integer",
-            "minimum": -9007199254740991,
+            "minimum": 0,
             "maximum": 9007199254740991,
+            "format": "int64",
             "description": "Leading zero bits required of sha256(challenge + ':' + nonce)."
           },
           "expiresAt": {
@@ -6309,8 +6362,9 @@
         "properties": {
           "revokedCount": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -6380,13 +6434,15 @@
           },
           "apiVersion": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "minApiVersion": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "serverId": {
             "type": "string",
@@ -6524,13 +6580,15 @@
         "properties": {
           "protocol": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "minProtocol": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "kinds": {
             "type": "array",
@@ -6599,93 +6657,111 @@
         "properties": {
           "maxOpsPerRequest": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxBodyBytes": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxWorkUnitsPerRequest": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "defaultPageSize": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxPageSize": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxVideoIdsPerAdd": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxVideoIdsPerList": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxBaselineEntries": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxIncludeKeys": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxPlaylists": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxPlaylistItems": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxItemsTotal": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxLikes": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxBookmarksPerType": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxTracks": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxPlayStats": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "maxPlayEvents": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "playAddPerHour": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -6835,7 +6911,8 @@
             "nullable": true,
             "type": "integer",
             "minimum": 1,
-            "maximum": 86400000
+            "maximum": 86400000,
+            "format": "int32"
           },
           "history": {
             "nullable": true,
@@ -6899,6 +6976,7 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 2000,
+            "format": "int32",
             "description": "Rows per page, default 500 (the first sync: 2000)."
           },
           "streams": {
@@ -7055,38 +7133,45 @@
         "properties": {
           "likes": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "albums": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "artists": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "playlists": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "items": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "plays": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "playedTracks": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -7104,13 +7189,15 @@
         "properties": {
           "heartbeatMs": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           },
           "retryMs": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "format": "int64"
           }
         },
         "required": [
@@ -7193,8 +7280,9 @@
             "nullable": true,
             "description": "`null`: unknown or live.",
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 2147483647,
+            "format": "int32"
           },
           "durationText": {
             "nullable": true,
@@ -7282,9 +7370,11 @@
           },
           "durationMs": {
             "type": "integer",
+            "format": "int32",
+            "minimum": 0,
             "maximum": 2147483647,
             "nullable": true,
-            "description": "Int32. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
+            "description": "Int32, milliseconds. Parsed leniently: an invalid value becomes null (DESIGN §3.9)."
           },
           "durationText": {
             "type": "string",
