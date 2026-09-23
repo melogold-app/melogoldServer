@@ -5,9 +5,9 @@
  * | ----- | ------------------------------------ | ---------------------------------------------------- |
  * | 1     | error and 404 handlers               | `setErrorHandler`, `setNotFoundHandler`, `onRequest` |
  * | 2     | `X-Request-Id`, `no-store`, log line | `onRequest`, `onSend`, `onResponse`                  |
- * | 3     | draining (shutdown)                  | `onRequest`                                          |
- * | 4     | route policy (auth, limits, body)    | `onRoute`                                            |
- * | 5     | security headers, CORS, compression  | `onRequest` / `onSend` (preflights before the guard) |
+ * | 3     | route policy (auth, limits, body)    | `onRoute`                                            |
+ * | 4     | security headers, CORS, compression  | `onRequest` / `onSend` (preflights before the guard) |
+ * | 5     | draining (shutdown)                  | `onRequest` (after CORS: the 503 keeps ACAO `*`)     |
  * | 6     | JSON-only bodies                     | `preParsing`                                         |
  * | 7     | string sanitization                  | `preValidation`                                      |
  * | 8     | `X-Sync-Protocol`                    | `preValidation`                                      |
@@ -77,11 +77,12 @@ export async function registerHttpInfrastructure(app: FastifyInstance, deps: Htt
   const ipTag = deps.ipTag ?? createIpTagger(deps.clock);
   registerErrorHandler(app, deps.random ? { random: deps.random } : {});
   registerRequestLogging(app);
-  if (deps.isDraining) registerDraining(app, deps.isDraining);
   registerRoutePolicy(app);
   await registerSecurityHeaders(app);
   await registerCors(app, deps.env.CORS_ORIGINS ?? []);
   await registerCompression(app, deps.env.HTTP_COMPRESSION ?? false);
+  // After CORS: a draining `/health` or `/server/info` still carries `Access-Control-Allow-Origin: *` (API §1.2).
+  if (deps.isDraining) registerDraining(app, deps.isDraining);
   registerBodyRules(app);
   registerSanitize(app);
   registerSyncProtocolCheck(app);

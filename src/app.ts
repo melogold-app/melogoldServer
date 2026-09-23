@@ -5,7 +5,7 @@
  * 1. `createFastify`: logger with masking, request ids, `trustProxy` from `TRUST_PROXY`, default body limit, the zod
  *    validator and serializer; Fastify's own 503-on-close is off (draining answers in the API's error format).
  * 2. HTTP infrastructure (`src/http/index.ts`): the error handler **before any route** (API §2.1), request logging,
- *    draining, the route policy table, security headers, CORS, compression, body rules, sanitization,
+ *    the route policy table, security headers, CORS, compression, draining, body rules, sanitization,
  *    `X-Sync-Protocol`, the Bearer guard, rate limits, the disk guard.
  * 3. OpenAPI (`@fastify/swagger`), which collects every route registered after it.
  * 4. Route modules in the order of DESIGN §2: server, auth, devices, account, linking, live, sync, playback. Each

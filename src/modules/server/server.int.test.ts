@@ -238,18 +238,23 @@ describe("the application around the server module", () => {
     }
   });
 
-  test("draining: new requests get 503 unavailable with Connection: close, liveness still answers", async () => {
+  test("draining: new requests get 503 unavailable with Connection: close (ACAO * kept), liveness answers", async () => {
     const draining = await createTestApp();
     try {
       draining.ctx.lifecycle.startDraining();
-      const health = await draining.app.inject({ method: "GET", url: "/health" });
+      const origin = { origin: "https://web.example" };
+      const health = await draining.app.inject({ method: "GET", url: "/health", headers: origin });
       const body = assertError(health, 503, "unavailable");
       assert.equal(body.retryAfterSeconds, 5);
       assert.equal(health.headers["retry-after"], "5");
       assert.equal(health.headers.connection, "close");
-      assertError(await draining.app.inject({ method: "GET", url: "/server/info" }), 503, "unavailable");
-      const live = await draining.app.inject({ method: "GET", url: "/health/live" });
+      assert.equal(health.headers["access-control-allow-origin"], "*");
+      const info = await draining.app.inject({ method: "GET", url: "/server/info", headers: origin });
+      assertError(info, 503, "unavailable");
+      assert.equal(info.headers["access-control-allow-origin"], "*");
+      const live = await draining.app.inject({ method: "GET", url: "/health/live", headers: origin });
       assert.equal(live.statusCode, 200);
+      assert.equal(live.headers["access-control-allow-origin"], "*");
     } finally {
       await draining.close();
     }
