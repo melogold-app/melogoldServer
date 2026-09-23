@@ -43,7 +43,10 @@
 - **`kysely`** импортируется только в `src/db/**`, `*.repository.ts`, `src/modules/sync/**`, миграциях, тестах и `scripts/`. Репозиторий чужого модуля импортировать нельзя.
 - **Слои модуля:** `routes` — схемы и вызов сервиса; `service` — логика, `ctx.db.read/write`, `AppError` с кодом, SSE после commit; `repository` — `(q, …)` только по своим таблицам.
 - **SQL:** один код на оба диалекта; ограничения не перехватываются внутри транзакции (`ON CONFLICT` и `RETURNING`); `lockUser` — первый оператор сериализуемой записи; в транзакции нет сети и argon2. Каждый новый запрос покрыт интеграционным тестом.
-- **Ошибки:** клиенты ветвятся только по `code` из реестра `src/http/error-codes.ts`.
+- **Ошибки:** клиенты ветвятся только по `code` из реестра `src/http/error-codes.ts`. Сервисы бросают только `new AppError(code, { details })` из `src/http/errors.ts`: статус и текст берутся из реестра, обязательные детали проверяет typecheck.
+- **HTTP-политика маршрута** (auth из API §3, лимит тела §1.9, лимиты частоты §1.10, `X-Sync-Protocol`, проверка диска) задаётся одной таблицей `src/http/route-policy.ts`, а не опциями маршрутов. Маршрут вне таблицы закрыт (`bearer`, 120/мин user). Вызывающий Bearer-маршрута — `requireAuth(request)`.
+- **Время и строки:** время на входе — `parseIso`, на выходе — `formatIso` (`src/lib/time.ts`); длины строк — `utf16LengthBetween`, обрезка — `truncateUtf16` (`src/lib/strings.ts`). Время берётся только из `ctx.clock`.
+- **Сессии и удаление устройств** — только через `issueSession` (`src/lib/session.ts`) и `removeDevicesInTx` + `afterRemove` после commit (`src/lib/device-removal.ts`).
 - **Личных значений по умолчанию нет** ни в коде, ни в конфигурации.
 
 ## Тесты
