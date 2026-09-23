@@ -473,31 +473,40 @@
   "opResults": [
     {
       "code": "playlist_deleted",
-      "status": "rejected"
+      "status": "rejected",
+      "details": []
     },
     {
       "code": "invalid_video_id",
-      "status": "rejected"
+      "status": "rejected",
+      "details": []
     },
     {
       "code": "unknown_kind",
-      "status": "deferred"
+      "status": "deferred",
+      "details": []
     },
     {
       "code": "invalid_payload",
-      "status": "deferred"
+      "status": "deferred",
+      "details": []
     },
     {
       "code": "quota_exceeded",
-      "status": "deferred"
+      "status": "deferred",
+      "details": []
     },
     {
       "code": "playlist_not_found",
-      "status": "deferred"
+      "status": "deferred",
+      "details": []
     },
     {
       "code": "op_rate_limited",
-      "status": "deferred"
+      "status": "deferred",
+      "details": [
+        "retryAfterSeconds"
+      ]
     }
   ],
   "clientLocalOpCodes": [

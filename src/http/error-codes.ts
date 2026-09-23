@@ -191,16 +191,20 @@ export type CodeWithRequiredDetails = {
 
 export type OpResultStatus = "rejected" | "deferred";
 
+/** `OpResult` fields that carry a detail of the code (not `null` only with it). */
+export type OpResultDetailKey = "retryAfterSeconds";
+
+/** Each code with its status and the `OpResult` detail fields it comes with (API §2.3: `deferred` + `retryAfterSeconds`). */
 export const OP_RESULT_CODES = {
-  playlist_deleted: { status: "rejected" },
-  invalid_video_id: { status: "rejected" },
-  unknown_kind: { status: "deferred" },
-  invalid_payload: { status: "deferred" },
-  quota_exceeded: { status: "deferred" },
-  playlist_not_found: { status: "deferred" },
-  /** Comes with `retryAfterSeconds`; the client keeps the op pending. */
-  op_rate_limited: { status: "deferred" },
-} as const satisfies Record<string, Readonly<{ status: OpResultStatus }>>;
+  playlist_deleted: { status: "rejected", details: [] },
+  invalid_video_id: { status: "rejected", details: [] },
+  unknown_kind: { status: "deferred", details: [] },
+  invalid_payload: { status: "deferred", details: [] },
+  quota_exceeded: { status: "deferred", details: [] },
+  playlist_not_found: { status: "deferred", details: [] },
+  /** The client keeps the op pending and retries after `retryAfterSeconds`. */
+  op_rate_limited: { status: "deferred", details: ["retryAfterSeconds"] },
+} as const satisfies Record<string, Readonly<{ status: OpResultStatus; details: readonly OpResultDetailKey[] }>>;
 
 export type OpResultCode = keyof typeof OP_RESULT_CODES;
 

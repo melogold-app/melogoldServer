@@ -1,6 +1,7 @@
 /**
  * `npm run openapi` (second part): writes `spec/error-codes.json`, the machine-readable registry of API §2.2 (HTTP
- * error codes with status, message and details) and §2.3 (op result codes), from `src/http/error-codes.ts`.
+ * error codes with status, message and details) and §2.3 (op result codes with status and `OpResult` detail fields),
+ * from `src/http/error-codes.ts`.
  * Clients branch only on `code` (API §2.2). CC0-1.0 (DESIGN §12, question 2; `spec/LICENSE`).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -17,7 +18,7 @@ export type ErrorCodesDocument = Readonly<{
     message: string;
     details: Readonly<{ required: readonly string[]; optional: readonly string[] }>;
   }>[];
-  opResults: readonly Readonly<{ code: string; status: string }>[];
+  opResults: readonly Readonly<{ code: string; status: string; details: readonly string[] }>[];
   clientLocalOpCodes: readonly string[];
 }>;
 
@@ -40,6 +41,7 @@ export function errorCodesDocument(): ErrorCodesDocument {
     opResults: (Object.keys(OP_RESULT_CODES) as OpResultCode[]).map((code) => ({
       code,
       status: OP_RESULT_CODES[code].status,
+      details: [...OP_RESULT_CODES[code].details],
     })),
     clientLocalOpCodes: [...CLIENT_LOCAL_OP_CODES],
   };

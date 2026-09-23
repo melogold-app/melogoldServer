@@ -14,6 +14,7 @@ import {
   OP_RESULT_CODES,
   isErrorCode,
 } from "./error-codes.ts";
+import { OpResult } from "../contract/sync.ts";
 
 const API = readFileSync(new URL("../../docs/API.md", import.meta.url), "utf8");
 
@@ -119,9 +120,9 @@ describe("error code registry (API §2.2)", () => {
 });
 
 describe("op result codes (API §2.3)", () => {
-  test("same codes and statuses as the table", () => {
+  test("same codes, statuses and details as the table", () => {
     const rows = tableRows(section("### 2.3", "### 2.4"));
-    const server = new Map<string, string>();
+    const server = new Map<string, { status: string; details: string[] }>();
     const local: string[] = [];
     for (const [codesCell = "", statusCell = ""] of rows) {
       const codes = backticked(codesCell);
@@ -129,13 +130,30 @@ describe("op result codes (API §2.3)", () => {
         local.push(...codes);
         continue;
       }
-      const status = backticked(statusCell)[0] ?? "";
-      for (const code of codes) server.set(code, status);
+      // "`deferred` + `retryAfterSeconds`": the status, then the OpResult fields that come with the code.
+      const [status = "", ...details] = backticked(statusCell);
+      for (const code of codes) server.set(code, { status, details });
     }
     assert.deepEqual(
-      Object.fromEntries(Object.entries(OP_RESULT_CODES).map(([code, spec]) => [code, spec.status])),
+      Object.fromEntries(
+        Object.entries(OP_RESULT_CODES).map(([code, spec]) => [
+          code,
+          { status: spec.status, details: [...spec.details] },
+        ]),
+      ),
       Object.fromEntries(server),
     );
+    assert.deepEqual(server.get("op_rate_limited")?.details, ["retryAfterSeconds"]);
     assert.deepEqual([...CLIENT_LOCAL_OP_CODES], local);
+  });
+
+  test("every detail is a nullable field of OpResult", () => {
+    const fields = OpResult.shape;
+    for (const spec of Object.values(OP_RESULT_CODES)) {
+      for (const key of spec.details) {
+        assert.ok(Object.hasOwn(fields, key), key);
+        assert.equal(fields[key].safeParse(null).success, true, `${key} is null without its code`);
+      }
+    }
   });
 });

@@ -24,6 +24,10 @@ describe("spec/error-codes.json", () => {
       Object.keys(OP_RESULT_CODES),
     );
     assert.deepEqual(document.clientLocalOpCodes, ["client_bug", "server_error"]);
+    assert.deepEqual(
+      document.opResults.find((entry) => entry.code === "op_rate_limited"),
+      { code: "op_rate_limited", status: "deferred", details: ["retryAfterSeconds"] },
+    );
     const deviceLimit = document.errors.find((entry) => entry.code === "device_limit_reached");
     assert.deepEqual(deviceLimit, {
       code: "device_limit_reached",
