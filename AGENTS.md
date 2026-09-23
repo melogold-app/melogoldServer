@@ -35,6 +35,8 @@
 | `npm run schema:sql`                        | генерация `docs/schema.*.sql`, `src/db/schema.snapshot.json` и `src/db/types.ts` из миграций |
 | `npm run dev`                               | сервер с `--watch`, переменные из `.env` (образец — `.env.example`)                          |
 | `npm run check`                             | typecheck, lint, format:check и тесты на SQLite одной командой                               |
+| `docker build -t melogold-server:local .`   | образ по нормативному `Dockerfile` (DESIGN §7.1), контекст — allowlist `.dockerignore`       |
+| `scripts/smoke.sh melogold-server:local`    | smoke образа, как в CI: API, register → sync (заглушки 501 пропускаются), перезапуск         |
 
 ## Обязательные правила
 

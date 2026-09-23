@@ -1,0 +1,116 @@
+# CI (DESIGN §10, PLAN M0 step 0.10): static checks, tests on both dialects, the image and its smoke on amd64 and arm64.
+# Every action is pinned to a full commit SHA (the tag is in the comment); Dependabot keeps them current.
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    name: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      # --ignore-scripts as in the image's deps stage: only argon2 has an install script, and it just finds its prebuild.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - name: openapi:check (generated openapi/* and spec/error-codes.json are committed)
+        run: npm run openapi:check
+      - name: schema:sql:check (generated docs/schema.*.sql, snapshot and types are committed)
+        run: npm run schema:sql:check
+      - name: redocly lint
+        run: npm run openapi:lint
+      - name: shellcheck
+        run: shellcheck -s sh scripts/smoke.sh
+      # `oasdiff breaking` against the latest release is added here after v0.1.0 (DESIGN §10).
+
+  test:
+    name: test (${{ matrix.db }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [sqlite, postgres]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      # --ignore-scripts as in the image's deps stage: only argon2 has an install script, and it just finds its prebuild.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: PostgreSQL 18 with the en_US.UTF-8 locale (compose.dev.yml)
+        if: matrix.db == 'postgres'
+        run: |
+          npm run db:up
+          collation=$(docker compose -f compose.dev.yml exec -T postgres \
+            psql -U melogold -d melogold -tAc "SELECT datcollate FROM pg_database WHERE datname = current_database()")
+          echo "server $(docker compose -f compose.dev.yml exec -T postgres psql -U melogold -d melogold -tAc 'SHOW server_version'), collation $collation"
+          test "$collation" = "en_US.UTF-8"
+      - name: npm test (TEST_DB=sqlite)
+        if: matrix.db == 'sqlite'
+        run: npm test
+      - name: npm run test:pg (TEST_DB=postgres)
+        if: matrix.db == 'postgres'
+        run: npm run test:pg
+      - name: PostgreSQL logs
+        if: failure() && matrix.db == 'postgres'
+        run: docker compose -f compose.dev.yml logs --tail 200 postgres
+
+  docker:
+    name: docker (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      IMAGE: melogold-server:ci
+      APP_VERSION: 0.0.0-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tools of scripts/smoke.sh
+        run: |
+          command -v jq >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q jq; }
+          docker version --format 'docker {{.Server.Version}} {{.Server.Arch}}'
+      - name: Build the image (native ${{ matrix.arch }})
+        run: |
+          docker build --pull \
+            --build-arg APP_VERSION="$APP_VERSION" \
+            --build-arg GIT_SHA="$GITHUB_SHA" \
+            --tag "$IMAGE" .
+          docker image ls "$IMAGE"
+      - name: scripts/smoke.sh
+        env:
+          SMOKE_EXPECT_VERSION: ${{ env.APP_VERSION }}
+          SMOKE_EXPECT_REVISION: ${{ github.sha }}
+        run: scripts/smoke.sh "$IMAGE"

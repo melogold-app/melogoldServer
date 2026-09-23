@@ -1,0 +1,13 @@
+# Build context of the image (DESIGN §7.1). Allowlist: everything is excluded first, so tests, spec/, docs/, deploy/,
+# scripts/, .git, node_modules, local data (.data/) and .env files never reach the context or the image.
+*
+!package.json
+!package-lock.json
+!src/
+!openapi/
+!docker/melogold
+
+# Tests and the test harness are not shipped.
+src/**/*.test.ts
+src/test/
+**/.DS_Store

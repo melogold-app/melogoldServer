@@ -1,0 +1,2 @@
+#!/nodejs/bin/node
+import("/app/src/main.ts").then((m) => m.main(process.argv.slice(2)));
