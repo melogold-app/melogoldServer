@@ -22,21 +22,23 @@
 
 ## Команды
 
-| Команда                                     | Что делает                                                                                   |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `npm ci`                                    | установка зависимостей                                                                       |
-| `npm run typecheck`                         | `tsc` без эмита                                                                              |
-| `npm run lint` / `npm run lint:fix`         | ESLint (type-checked, правила импорта и `process.env`)                                       |
-| `npm run format` / `npm run format:check`   | Prettier                                                                                     |
-| `npm test`                                  | все `src/**/*.test.ts` на SQLite (`TEST_DB=sqlite`)                                          |
-| `npm run db:up`, затем `npm run test:pg`    | PostgreSQL 18 (`en_US.UTF-8`, порт 55432) из `compose.dev.yml` и те же тесты на нём          |
-| `npm run openapi` / `npm run openapi:check` | генерация `openapi/*` и `spec/error-codes.json` / проверка, что они закоммичены              |
-| `npm run openapi:lint`                      | `redocly lint` сгенерированного `openapi/openapi.json` (`redocly.yaml`)                      |
-| `npm run schema:sql`                        | генерация `docs/schema.*.sql`, `src/db/schema.snapshot.json` и `src/db/types.ts` из миграций |
-| `npm run dev`                               | сервер с `--watch`, переменные из `.env` (образец — `.env.example`)                          |
-| `npm run check`                             | typecheck, lint, format:check и тесты на SQLite одной командой                               |
-| `docker build -t melogold-server:local .`   | образ по нормативному `Dockerfile` (DESIGN §7.1), контекст — allowlist `.dockerignore`       |
-| `scripts/smoke.sh melogold-server:local`    | smoke образа, как в CI: API, register → sync (заглушки 501 пропускаются), перезапуск         |
+| Команда                                     | Что делает                                                                                                       |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `npm ci --ignore-scripts`                   | установка зависимостей, как в CI и образе (см. ниже)                                                             |
+| `npm run typecheck`                         | `tsc` без эмита                                                                                                  |
+| `npm run lint` / `npm run lint:fix`         | ESLint (type-checked, правила импорта и `process.env`)                                                           |
+| `npm run format` / `npm run format:check`   | Prettier                                                                                                         |
+| `npm test`                                  | все `src/**/*.test.ts` на SQLite (`TEST_DB=sqlite`)                                                              |
+| `npm run db:up`, затем `npm run test:pg`    | PostgreSQL 18 (`en_US.UTF-8`, порт 55432) из `compose.dev.yml` и те же тесты на нём                              |
+| `npm run openapi` / `npm run openapi:check` | генерация `openapi/*` и `spec/error-codes.json` / проверка, что они закоммичены, включая новые и удалённые файлы |
+| `npm run openapi:lint`                      | `redocly lint` сгенерированного `openapi/openapi.json` (`redocly.yaml`)                                          |
+| `npm run schema:sql`                        | генерация `docs/schema.*.sql`, `src/db/schema.snapshot.json` и `src/db/types.ts` из миграций                     |
+| `npm run dev`                               | сервер с `--watch`, переменные из `.env` (образец — `.env.example`)                                              |
+| `npm run check`                             | typecheck, lint, format:check и тесты на SQLite одной командой                                                   |
+| `docker build -t melogold-server:local .`   | образ по нормативному `Dockerfile` (DESIGN §7.1), контекст — allowlist `.dockerignore`                           |
+| `scripts/smoke.sh melogold-server:local`    | smoke образа, как в CI: API, register → sync (заглушки 501 пропускаются), перезапуск                             |
+
+Зависимости ставятся с `--ignore-scripts`: prebuild better-sqlite3 лежит в пакете, а argon2 находит свой при загрузке. Без флага npm 11 запускает для better-sqlite3 `node-gyp rebuild`, и установке нужны python3, make и компилятор C++.
 
 ## Обязательные правила
 

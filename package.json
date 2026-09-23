@@ -24,10 +24,10 @@
     "test": "TEST_DB=sqlite node --test --test-reporter=spec 'src/**/*.test.ts'",
     "test:pg": "TEST_DB=postgres TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgres://melogold:melogold@127.0.0.1:55432/melogold} node --test --test-reporter=spec 'src/**/*.test.ts'",
     "openapi": "node scripts/gen-openapi.ts && node scripts/gen-error-codes.ts",
-    "openapi:check": "npm run openapi && git diff --exit-code -- openapi spec/error-codes.json",
+    "openapi:check": "npm run openapi && git diff --exit-code -- openapi spec/error-codes.json && ! git status --porcelain -- openapi spec | grep .",
     "openapi:lint": "redocly lint openapi/openapi.json",
     "schema:sql": "node scripts/gen-schema-sql.ts",
-    "schema:sql:check": "npm run schema:sql && git diff --exit-code -- docs/schema.sqlite.sql docs/schema.postgres.sql src/db/schema.snapshot.json src/db/types.ts",
+    "schema:sql:check": "npm run schema:sql && git diff --exit-code -- docs/schema.sqlite.sql docs/schema.postgres.sql src/db/schema.snapshot.json src/db/types.ts && ! git status --porcelain -- docs/schema.sqlite.sql docs/schema.postgres.sql src/db/schema.snapshot.json src/db/types.ts | grep .",
     "db:up": "docker compose -f compose.dev.yml up -d --wait",
     "db:down": "docker compose -f compose.dev.yml down",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
