@@ -1,0 +1,14 @@
+# Everything textual is stored and checked out with LF (the image, the installer and the shell scripts depend on it).
+* text=auto eol=lf
+
+*.sh             text eol=lf
+*.sh.in          text eol=lf
+deploy/**        text eol=lf
+docker/melogold  text eol=lf
+
+# Binary assets
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.gz   binary
+*.age  binary

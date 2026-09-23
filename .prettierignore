@@ -1,0 +1,13 @@
+# Dependencies and local data
+node_modules/
+coverage/
+dist/
+.data/
+package-lock.json
+
+# Normative documents are edited by hand, generated files are written by scripts
+docs/
+openapi/
+spec/
+LICENSE
+README.md

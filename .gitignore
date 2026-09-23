@@ -6,3 +6,6 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# Local development data (DATA_DIR in .env.example)
+.data/
