@@ -31,7 +31,7 @@
 | `npm test`                                  | все `src/**/*.test.ts` на SQLite (`TEST_DB=sqlite`)                                                              |
 | `npm run db:up`, затем `npm run test:pg`    | PostgreSQL 18 (`en_US.UTF-8`, порт 55432) из `compose.dev.yml` и те же тесты на нём                              |
 | `npm run openapi` / `npm run openapi:check` | генерация `openapi/*` и `spec/error-codes.json` / проверка, что они закоммичены, включая новые и удалённые файлы |
-| `npm run openapi:lint`                      | `redocly lint` сгенерированного `openapi/openapi.json` (`redocly.yaml`)                                          |
+| `npm run openapi:lint`                      | `redocly lint` сгенерированных `openapi/openapi.json` и `openapi.yaml` (`redocly.yaml`)                          |
 | `npm run schema:sql`                        | генерация `docs/schema.*.sql`, `src/db/schema.snapshot.json` и `src/db/types.ts` из миграций                     |
 | `npm run dev`                               | сервер с `--watch`, переменные из `.env` (образец — `.env.example`)                                              |
 | `npm run check`                             | typecheck, lint, format:check и тесты на SQLite одной командой                                                   |

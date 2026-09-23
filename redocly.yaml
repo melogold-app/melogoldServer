@@ -1,4 +1,4 @@
-# Redocly CLI (npm run openapi:lint; CI "static", DESIGN §10) for the generated openapi/openapi.json.
+# Redocly CLI (npm run openapi:lint; CI "static", DESIGN §10) for the generated openapi/openapi.json and openapi.yaml.
 extends:
   - recommended
 rules:

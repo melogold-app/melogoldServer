@@ -4,3 +4,7 @@ openapi/openapi.json:
   operation-4xx-response:
     - "#/paths/~1health/get/responses"
     - "#/paths/~1health~1live/get/responses"
+openapi/openapi.yaml:
+  operation-4xx-response:
+    - "#/paths/~1health/get/responses"
+    - "#/paths/~1health~1live/get/responses"
