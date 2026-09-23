@@ -6,8 +6,9 @@
  * | Error                                                              | Answer                                   |
  * | ------------------------------------------------------------------ | ---------------------------------------- |
  * | unique / FK (PG 23505/23503, SQLite `SQLITE_CONSTRAINT_*`)          | the service translates it, otherwise 500 |
- * | PG 40P01, 40001, 55P03, 57014, 53300; SQLite `SQLITE_BUSY`          | 503 `server_busy`, Retry-After 1..2      |
- * | PG 08xxx, 57P01 (and no connection at all)                         | 503 `unavailable`, Retry-After 5         |
+ * | PG 40P01, 40001, 55P03, 57014, 53300; `pg` pool wait timeout;      | 503 `server_busy`, Retry-After 1..2      |
+ * | SQLite `SQLITE_BUSY*`, `SQLITE_LOCKED*`                            |                                          |
+ * | PG 08xxx, 57P01, 57P03; no network connection (`ECONNREFUSED`, …)  | 503 `unavailable`, Retry-After 5         |
  * | PG 53100; SQLite `SQLITE_FULL`                                     | 503 `storage_full`, Retry-After 600      |
  * | PG 22021 (NUL), 22003 (overflow)                                   | 500: must not happen (API §1.4), a bug   |
  *

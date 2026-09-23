@@ -44,7 +44,7 @@
 | Запрос | Где | Правило |
 |---|---|---|
 | `Authorization: Bearer <accessToken>` | все маршруты, кроме помеченных public | закрыто по умолчанию |
-| `Content-Type: application/json` | любой POST/PUT/PATCH | UTF-8. **Тело — JSON-объект, как минимум `{}`**. Иное → `415 unsupported_media_type`. Пустое тело → `400 invalid_json` |
+| `Content-Type: application/json` | любой POST/PUT/PATCH | UTF-8. **Тело — JSON-объект, как минимум `{}`**. Другой или отсутствующий `Content-Type` (или `charset` не UTF-8) → `415 unsupported_media_type`. Пустое тело или не JSON → `400 invalid_json`. JSON, но не объект (`null`, `[]`, число) → `400 invalid_request`. Тело DELETE не читается при любом `Content-Type` |
 | `Accept-Encoding: gzip` | все | рекомендуется |
 | `User-Agent: melogold-<android\|macos\|windows\|linux>/<semver>` | все | обязателен у клиентов, сервер только логирует |
 | `Accept-Language` | все | BCP 47. Влияет только на строки, которые сервер пишет сам (имя плейлиста восстановления, «Без названия»). Сообщения ошибок не локализуются |
@@ -297,8 +297,8 @@ type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код
 | Ошибка | Ответ |
 |---|---|
 | unique / FK (PG `23505`/`23503`; SQLite `SQLITE_CONSTRAINT_UNIQUE`/`_PRIMARYKEY`/`_FOREIGNKEY`) | сервис переводит в свой код. Непереведённая → 500 |
-| PG `40P01`, `40001`, `55P03`, `57014`, `53300`; SQLite `SQLITE_BUSY` после `busy_timeout` | `503 server_busy`, `Retry-After: 1..2` |
-| PG `08*`, `57P01` | `503 unavailable`, `Retry-After: 5` |
+| PG `40P01`, `40001`, `55P03`, `57014`, `53300`; пул `pg` не дождался свободного соединения (`timeout exceeded when trying to connect`); SQLite `SQLITE_BUSY*` после `busy_timeout`, `SQLITE_LOCKED*` | `503 server_busy`, `Retry-After: 1..2` |
+| PG `08*`, `57P01`, `57P03`; нет сетевого соединения с БД (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, …, обрыв соединения `pg`) | `503 unavailable`, `Retry-After: 5` |
 | PG `53100`; SQLite `SQLITE_FULL` | `503 storage_full`, `Retry-After: 600` |
 | PG `22021` (NUL), `22003` (переполнение) | не должны возникать (§1.4). Если возникли → 500 и это баг |
 
