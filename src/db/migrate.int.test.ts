@@ -75,6 +75,18 @@ describe(`migrations (${TEST_DIALECT})`, () => {
     });
   });
 
+  test("concurrent runs: one applies the migrations, the one that lost the lock reports up_to_date", async () => {
+    await withEmptyDb(async (db) => {
+      const { log } = recordingLog();
+      const results = await Promise.all([migrateToLatest(db, { log }), migrateToLatest(db, { log })]);
+      const statuses = results.map((result) => result.status).sort();
+      assert.deepEqual(statuses, ["migrated", "up_to_date"]);
+      const migrated = results.find((result) => result.status === "migrated");
+      assert.deepEqual(migrated?.status === "migrated" ? migrated.executed : null, KNOWN);
+      for (const result of results) assert.deepEqual(result.state, { applied: KNOWN, pending: [], unknown: [] });
+    });
+  });
+
   test("the migrated schema matches the snapshot: tables, physical types, nullability, indexes", async () => {
     await withMigratedDb(async (db) => {
       const snapshot = loadSchemaSnapshot();

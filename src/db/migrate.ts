@@ -139,6 +139,10 @@ export async function migrateToLatest<DB>(
     );
   }
   const executed = results.map((result) => result.migrationName);
+  // Another process took Kysely's migration lock first and applied everything we saw as pending.
+  if (executed.length === 0) {
+    return Object.freeze({ status: "up_to_date", state: stateOf(await appliedMigrations(target), migrations) });
+  }
   return Object.freeze({
     status: "migrated",
     executed: Object.freeze(executed),
