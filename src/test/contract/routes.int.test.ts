@@ -235,6 +235,20 @@ describe("routes of API §3", () => {
     }
   });
 
+  test("DELETE has no body: a JSON (or any) Content-Type with an empty body is not a JSON error", async () => {
+    const headers = { ...bearer(account.session.tokens.accessToken), "x-sync-protocol": "1" };
+    const variants = [
+      { headers: { ...headers, "content-type": "application/json" } },
+      { headers: { ...headers, "content-type": "application/json", "content-length": "0" }, payload: "" },
+      { headers: { ...headers, "content-type": "application/json" }, payload: "{" },
+      { headers: { ...headers, "content-type": "text/plain" }, payload: "x" },
+    ];
+    for (const variant of variants) {
+      const response = await t.app.inject({ method: "DELETE", url: "/playback/state", ...variant });
+      assertError(response, 501, "not_implemented");
+    }
+  });
+
   test("X-Sync-Protocol is checked on its routes: missing → 400, unsupported → 409", async () => {
     for (const route of ROUTES.filter((item) => item.syncProtocol)) {
       const options = request(route, { token: account.session.tokens.accessToken });

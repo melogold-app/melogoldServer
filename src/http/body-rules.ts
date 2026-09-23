@@ -7,6 +7,9 @@
  * - The body is a JSON object, at least `{}`: an empty body is `400 invalid_json` (Fastify's JSON parser), a
  *   non-object fails the route schema (`400 invalid_request`).
  * - Only the JSON parser remains: Fastify's default `text/plain` parser is removed.
+ * - Other methods have no body (API §1.2 applies the rule to `POST`, `PUT` and `PATCH` only). Fastify 5 still reads a
+ *   `DELETE` body, so a client that sends `Content-Type: application/json` on every request would get `400 invalid_json`
+ *   for an empty `DELETE /playback/state`: for these methods the body is ignored whatever its type.
  * - Size limits per route come from `route-policy.ts` (`413 payload_too_large`).
  */
 import type { FastifyInstance } from "fastify";
@@ -39,6 +42,19 @@ export function requiresJsonBody(method: string): boolean {
 
 export function registerBodyRules(app: FastifyInstance): void {
   app.removeContentTypeParser("text/plain");
+  // Fastify's own JSON parser (empty → invalid_json, prototype poisoning → invalid_json), for body methods only.
+  const parseJson = app.getDefaultJsonParser("error", "error");
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
+    // The default parser is callback-style and returns nothing.
+    if (requiresJsonBody(request.method))
+      void parseJson(request, typeof body === "string" ? body : body.toString(), done);
+    else done(null, undefined);
+  });
+  // Reached only by the other methods (`preParsing` refuses any other type for POST/PUT/PATCH): the body is ignored.
+  app.addContentTypeParser("*", (_request, _payload, done) => {
+    done(null, undefined);
+  });
   app.addHook("preParsing", async (request, _reply, payload) => {
     if (requiresJsonBody(request.method) && !isJsonContentType(request.headers["content-type"])) {
       throw new AppError("unsupported_media_type");
