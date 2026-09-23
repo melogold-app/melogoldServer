@@ -1,7 +1,10 @@
-# Melogold Server
+<p align="center">
+  <img src=".github/melogold-icon.png" width="128" height="128" alt="Melogold">
+</p>
 
-Сервер синхронизации [Melogold](https://github.com/MaximCemencov/melogoldAndroid): общие избранное,
-библиотека и плейлисты на всех устройствах пользователя.
+<h1 align="center">Melogold Server</h1>
+
+<p align="center">Сервер синхронизации <a href="https://github.com/MaximCemencov/melogoldAndroid">Melogold</a>: общие избранное, библиотека и плейлисты на всех устройствах пользователя.</p>
 
 ## Что хранит сервер
 
