@@ -1216,7 +1216,7 @@ FROM node:${NODE_MAJOR}-trixie-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts \
- && node --input-type=module -e "await import('better-sqlite3'); await import('argon2')" \
+ && node --input-type=module -e "const { default: Database } = await import('better-sqlite3'); new Database(':memory:').prepare('SELECT 1').get(); await import('argon2')" \
  && mkdir -p /skel/data/.tmp
 
 FROM gcr.io/distroless/nodejs${NODE_MAJOR}-debian13:nonroot
@@ -1245,7 +1245,7 @@ CMD ["serve"]
   import("/app/src/main.ts").then((m) => m.main(process.argv.slice(2)));
   ```
   Файл без расширения исполняется как CJS, а `import()` загружает TS через type stripping. `serve` запускает сервер, остальные команды — CLI без fastify.
-- **`--ignore-scripts` безопасен** (m25): у better-sqlite3 13.0.3 `gypfile:false` и prebuilds в пакете, argon2 находит свой prebuild при загрузке. Проверка — шаг `import` в стадии `deps`.
+- **`--ignore-scripts` безопасен** (m25): у better-sqlite3 13.0.3 `gypfile:false` и prebuilds в пакете, argon2 находит свой prebuild при загрузке. Проверка — шаг в стадии `deps`: он открывает `new Database(':memory:')` и выполняет `SELECT 1` (один `import('better-sqlite3')` нативный модуль не загружает), затем импортирует argon2.
 - **`VOLUME` не объявляется.** Приложение по `/proc/self/mountinfo` проверяет, что `/data` смонтирован, и громко предупреждает, если нет.
 - **`.dockerignore`** исключает тесты, `spec/`, `docs/`, `deploy/`, `.git`, `node_modules`.
 - **Цель по размеру:** меньше 80 МБ сжатого образа.
