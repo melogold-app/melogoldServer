@@ -479,7 +479,7 @@ describe(`HTTP infrastructure (${TEST_DIALECT})`, () => {
   });
 
   describe("X-Sync-Protocol and storage", () => {
-    test("missing → 400, unsupported → 409 with the range, 1 → 200", async () => {
+    test("missing or not an integer → 400, any other integer → 409 with the range, 1 → 200", async () => {
       const { session } = await account();
       const sync = (headers: Record<string, string>) =>
         app.inject({
@@ -490,10 +490,16 @@ describe(`HTTP infrastructure (${TEST_DIALECT})`, () => {
         });
       const missing = assertError(await sync({}), 400, "invalid_request");
       assert.deepEqual(missing.issues, [{ path: "headers.x-sync-protocol", code: "invalid_type" }]);
-      assertError(await sync({ "x-sync-protocol": "1.5" }), 400, "invalid_request");
-      const unsupported = assertError(await sync({ "x-sync-protocol": "2" }), 409, "protocol_unsupported");
-      assert.equal(unsupported.minProtocol, 1);
-      assert.equal(unsupported.maxProtocol, 1);
+      for (const value of ["1.5", "abc", "", "+1", "1e3", "0x1", "--1"]) {
+        const invalid = assertError(await sync({ "x-sync-protocol": value }), 400, "invalid_request");
+        assert.deepEqual(invalid.issues, [{ path: "headers.x-sync-protocol", code: "invalid_format" }], value);
+      }
+      // Any integer outside [minProtocol, protocol] is 409, however long or negative (API §1.2).
+      for (const value of ["2", "0", "-1", "2147483648", "99999999999999999999", "-99999999999999999999"]) {
+        const unsupported = assertError(await sync({ "x-sync-protocol": value }), 409, "protocol_unsupported");
+        assert.equal(unsupported.minProtocol, 1, value);
+        assert.equal(unsupported.maxProtocol, 1, value);
+      }
       assert.equal((await sync({ "x-sync-protocol": "1" })).statusCode, 200);
     });
 

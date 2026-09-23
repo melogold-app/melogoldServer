@@ -3079,7 +3079,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[0-9]{1,9}$"
+              "pattern": "^-?[0-9]+$"
             },
             "in": "header",
             "name": "X-Sync-Protocol",
@@ -3188,7 +3188,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[0-9]{1,9}$"
+              "pattern": "^-?[0-9]+$"
             },
             "in": "header",
             "name": "X-Sync-Protocol",
@@ -3317,7 +3317,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[0-9]{1,9}$"
+              "pattern": "^-?[0-9]+$"
             },
             "in": "header",
             "name": "X-Sync-Protocol",
@@ -3446,7 +3446,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[0-9]{1,9}$"
+              "pattern": "^-?[0-9]+$"
             },
             "in": "header",
             "name": "X-Sync-Protocol",
@@ -3553,7 +3553,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[0-9]{1,9}$"
+              "pattern": "^-?[0-9]+$"
             },
             "in": "header",
             "name": "X-Sync-Protocol",
@@ -3670,7 +3670,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[0-9]{1,9}$"
+              "pattern": "^-?[0-9]+$"
             },
             "in": "header",
             "name": "X-Sync-Protocol",

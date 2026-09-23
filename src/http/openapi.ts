@@ -24,6 +24,7 @@ import { ERROR_CODES } from "./error-codes.ts";
 import type { ErrorCode } from "./error-codes.ts";
 import { BEARER_SECURITY_SCHEME, OPENAPI_TAGS } from "./operation.ts";
 import { resolveRoutePolicy, ROUTE_TABLE, routeKey } from "./route-policy.ts";
+import { SYNC_PROTOCOL_PATTERN } from "./sync-protocol.ts";
 
 export const OPENAPI_VERSION = "3.0.3";
 export const CONTRACT_LICENSE = Object.freeze({
@@ -178,7 +179,7 @@ const SYNC_PROTOCOL_HEADER_SCHEMA = {
   properties: {
     "X-Sync-Protocol": {
       type: "string",
-      pattern: "^[0-9]{1,9}$",
+      pattern: SYNC_PROTOCOL_PATTERN.source,
       description:
         "Sync protocol of the client, within [features.sync.minProtocol, features.sync.protocol] (API §1.2). Missing or not an integer → 400 invalid_request; outside → 409 protocol_unsupported.",
     },

@@ -8,7 +8,8 @@ import { MIN_SYNC_PROTOCOL, SYNC_PROTOCOL } from "../lib/protocol.ts";
 import { AppError } from "./errors.ts";
 
 export const SYNC_PROTOCOL_HEADER = "x-sync-protocol";
-const INTEGER = /^\d{1,9}$/;
+/** Any decimal integer, of any length: a long or negative one is an unsupported version (409), not a bad header. */
+export const SYNC_PROTOCOL_PATTERN = /^-?[0-9]+$/;
 
 /** The refusal for a header value, or `null` when the version is supported. */
 export function checkSyncProtocol(value: string | string[] | undefined): AppError | null {
@@ -16,11 +17,12 @@ export function checkSyncProtocol(value: string | string[] | undefined): AppErro
   if (value === undefined) {
     return new AppError("invalid_request", { details: { issues: [{ path, code: "invalid_type" }] } });
   }
-  if (typeof value !== "string" || !INTEGER.test(value)) {
+  if (typeof value !== "string" || !SYNC_PROTOCOL_PATTERN.test(value)) {
     return new AppError("invalid_request", { details: { issues: [{ path, code: "invalid_format" }] } });
   }
-  const version = Number(value);
-  if (version < MIN_SYNC_PROTOCOL || version > SYNC_PROTOCOL) {
+  // BigInt: "99999999999999999999" must not round into the supported range.
+  const version = BigInt(value);
+  if (version < BigInt(MIN_SYNC_PROTOCOL) || version > BigInt(SYNC_PROTOCOL)) {
     return new AppError("protocol_unsupported", {
       details: { minProtocol: MIN_SYNC_PROTOCOL, maxProtocol: SYNC_PROTOCOL },
     });

@@ -57,7 +57,7 @@ describe("X-Sync-Protocol (API §1.2)", () => {
   });
 
   test("missing or not an integer → 400 invalid_request", () => {
-    for (const value of [undefined, "", "1.0", "+1", "one", " 1", "1, 1", ["1", "1"], "1".repeat(10)]) {
+    for (const value of [undefined, "", "1.0", "+1", "one", " 1", "1, 1", ["1", "1"], "1e3", "-"]) {
       const error = checkSyncProtocol(value);
       assert.ok(error instanceof AppError, String(value));
       assert.equal(error.code, "invalid_request");
@@ -65,8 +65,17 @@ describe("X-Sync-Protocol (API §1.2)", () => {
     }
   });
 
-  test("outside [min, max] → 409 protocol_unsupported with the range", () => {
-    for (const value of ["0", "2", "999999999"]) {
+  test("any integer outside [min, max] → 409 protocol_unsupported with the range, however long or negative", () => {
+    for (const value of [
+      "0",
+      "2",
+      "999999999",
+      "-1",
+      "2147483648",
+      "1".repeat(10),
+      "9".repeat(20),
+      `-${"9".repeat(20)}`,
+    ]) {
       const error = checkSyncProtocol(value);
       assert.equal(error?.code, "protocol_unsupported");
       assert.deepEqual(error.details, { minProtocol: 1, maxProtocol: 1 });
