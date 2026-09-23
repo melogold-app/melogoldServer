@@ -4,7 +4,7 @@
 
 <h1 align="center">Melogold Server</h1>
 
-<p align="center">Сервер синхронизации <a href="https://github.com/MaximCemencov/melogoldAndroid">Melogold</a>: общие избранное, библиотека и плейлисты на всех устройствах пользователя.</p>
+<p align="center">Сервер синхронизации <a href="https://github.com/melogold-app/melogoldAndroid">Melogold</a>: общие избранное, библиотека и плейлисты на всех устройствах пользователя.</p>
 
 ## Что хранит сервер
 
@@ -28,7 +28,7 @@
 
 | Платформа | Репозиторий |
 |---|---|
-| Android | [melogoldAndroid](https://github.com/MaximCemencov/melogoldAndroid) |
+| Android | [melogoldAndroid](https://github.com/melogold-app/melogoldAndroid) |
 | Сервер | melogoldServer |
 | Windows | melogoldWindows |
 | Linux | melogoldLinux |
