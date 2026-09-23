@@ -47,6 +47,11 @@
 - **HTTP-политика маршрута** (auth из API §3, лимит тела §1.9, лимиты частоты §1.10, `X-Sync-Protocol`, проверка диска) задаётся одной таблицей `src/http/route-policy.ts`, а не опциями маршрутов. Маршрут вне таблицы закрыт (`bearer`, 120/мин user). Вызывающий Bearer-маршрута — `requireAuth(request)`.
 - **Время и строки:** время на входе — `parseIso`, на выходе — `formatIso` (`src/lib/time.ts`); длины строк — `utf16LengthBetween`, обрезка — `truncateUtf16` (`src/lib/strings.ts`). Время берётся только из `ctx.clock`.
 - **Сессии и удаление устройств** — только через `issueSession` (`src/lib/session.ts`) и `removeDevicesInTx` + `afterRemove` после commit (`src/lib/device-removal.ts`).
+- **Контракт** (`src/contract/**`): каждый DTO — zod-схема с `.meta({ id })` = имя компонента из API §4/§6/§11; полный список с направлением — `CONTRACT_COMPONENTS` (`src/contract/index.ts`), сверку с `docs/API.md` делают `src/contract/*.test.ts`.
+  - Запросы проверяются: поле `?` — `optional()` (отсутствие и `null` дают `undefined`), длины — `text()` в UTF-16, время — `Iso` (на выходе epoch-мс), лишние ключи отбрасываются.
+  - Ответы проверяются только по структуре (ключи, `null`, типы, целые); форматы и длины только документируются, перечисления — `type: string` с `*_VALUES` в коде.
+  - `POST /sync` валидирует `SyncRequestEnvelope` (только `opId`/`kind`/`at`/`base`), а `SyncRequest` с плоским `SyncOp` — только источник OpenAPI. Метаданные `TrackInput` схема пропускает как `unknown`, чистит сервис (DESIGN §3.9).
+- **Матрица DESIGN §4.8** — только функции `src/modules/security/policy.ts` (`Gate`: `allow` / `verify_password` / `refuse`).
 - **Личных значений по умолчанию нет** ни в коде, ни в конфигурации.
 
 ## Тесты
