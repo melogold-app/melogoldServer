@@ -252,9 +252,6 @@ type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код
 | 403 | `registration_closed` | — | register | спрятать регистрацию |
 | 403 | `pow_required`, `pow_invalid` | — | register | получить challenge, решить, повторить (один раз) |
 | 403 | `invalid_password` | — | me/password, me/recovery-code, me/delete, revoke*, PATCH devices | повторная проверка не прошла (счётчик reauth) |
-| 403 | `current_password_required` | `minDeviceAgeDays` | me/password | запросить старый пароль |
-| 403 | `security_cooldown` | `retryAfterSeconds` | me/recovery-code, me/delete | объяснить задержку |
-| 403 | `cooldown_restricted` | `retryAfterSeconds` | revoke*, PATCH devices, me/password | «Это устройство ограничено после смены пароля без старого» |
 | 403 | `recent_device_restricted` | — | revoke*, PATCH devices | запросить пароль и повторить с `password` |
 | 403 | `link_denied` | — | link/poll | «Отклонено» |
 | 404 | `not_found` | — | неизвестный маршрут | — |
@@ -400,12 +397,10 @@ type DeviceDto = {
   recentUntil: Iso | null;            // до этого момента устройство «новое» (DESIGN §4.8), иначе null
   isCurrent: boolean;
 };
-type SecurityCooldown = { until: Iso; startedAt: Iso; deviceId: Uuid | null; deviceName: string | null };
 type RecoveryCodeStatus = { createdAt: Iso; confirmed: boolean };
 type UserDto = {
   id: Uuid; login: string; createdAt: Iso; passwordChangedAt: Iso;
   recoveryCodeStatus: RecoveryCodeStatus;
-  securityCooldown: SecurityCooldown | null;
 };
 type TokenPair = { accessToken: string; accessTokenExpiresAt: Iso; refreshToken: string; refreshTokenExpiresAt: Iso };
 type AuthSession = {                  // register, login, recover, завершение привязки (poll)
@@ -491,7 +486,7 @@ type PowSolution = { challenge: string; nonce: string };
 {"login":"Maxim","password":"две собаки и кот","device":{"hwid":"3fa9c1d2e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1","name":"Google Pixel 8","platform":"android","osVersion":"16","model":"Google Pixel 8","clientVersion":"1.3.0"},"pow":{"challenge":"mgpow1.eyJu….kQ3v","nonce":"183422"}}
 ```
 ```json
-{"user":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-23T10:00:00.000Z","recoveryCodeStatus":{"createdAt":"2026-09-23T10:00:00.000Z","confirmed":false},"securityCooldown":null},
+{"user":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-23T10:00:00.000Z","recoveryCodeStatus":{"createdAt":"2026-09-23T10:00:00.000Z","confirmed":false}},
  "device":{"id":"9b1e2f4a-7c3d-4e5f-8a9b-0c1d2e3f4a5b","name":"Google Pixel 8","reportedName":"Google Pixel 8","customName":null,"platform":"android","osVersion":"16","model":"Google Pixel 8","clientVersion":"1.3.0","linkedVia":"register","linkedByDeviceId":null,"createdAt":"2026-09-23T10:00:00.000Z","lastSeenAt":"2026-09-23T10:00:00.000Z","lastSyncAt":null,"recentUntil":null,"isCurrent":true},
  "tokens":{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.c2ln","accessTokenExpiresAt":"2026-09-23T10:15:00.000Z","refreshToken":"mgrt1.eyJ0eXAiOiJyZWZyZXNoIn0.Xk3q","refreshTokenExpiresAt":"2026-12-22T10:00:00.000Z"},
  "serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","serverTime":"2026-09-23T10:00:00.000Z","recoveryCode":"7KQ2-MX9D-4TNP-B8RW-3HZF","signedOutDevices":0}
@@ -533,9 +528,9 @@ type LogoutRequest = { refreshToken: string };
 type MeResponse = { user: UserDto; device: DeviceDto; serverId: Uuid; serverTime: Iso };
 ```
 ```json
-{"user":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-30T08:00:00.000Z","recoveryCodeStatus":{"createdAt":"2026-09-23T10:00:00.000Z","confirmed":false},"securityCooldown":{"until":"2026-10-07T08:00:00.000Z","startedAt":"2026-09-30T08:00:00.000Z","deviceId":"77b2c1d0-3e4f-4a5b-8c6d-7e8f9a0b1c2d","deviceName":"MacBook Air"}},"device":{"id":"9b1e2f4a-7c3d-4e5f-8a9b-0c1d2e3f4a5b","name":"Google Pixel 8","reportedName":"Google Pixel 8","customName":null,"platform":"android","osVersion":"16","model":"Google Pixel 8","clientVersion":"1.3.0","linkedVia":"register","linkedByDeviceId":null,"createdAt":"2026-09-23T10:00:00.000Z","lastSeenAt":"2026-09-30T08:05:00.000Z","lastSyncAt":"2026-09-30T08:04:00.000Z","recentUntil":null,"isCurrent":true},"serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","serverTime":"2026-09-30T08:05:00.000Z"}
+{"user":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-30T08:00:00.000Z","recoveryCodeStatus":{"createdAt":"2026-09-23T10:00:00.000Z","confirmed":false}},"device":{"id":"9b1e2f4a-7c3d-4e5f-8a9b-0c1d2e3f4a5b","name":"Google Pixel 8","reportedName":"Google Pixel 8","customName":null,"platform":"android","osVersion":"16","model":"Google Pixel 8","clientVersion":"1.3.0","linkedVia":"register","linkedByDeviceId":null,"createdAt":"2026-09-23T10:00:00.000Z","lastSeenAt":"2026-09-30T08:05:00.000Z","lastSyncAt":"2026-09-30T08:04:00.000Z","recentUntil":null,"isCurrent":true},"serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","serverTime":"2026-09-30T08:05:00.000Z"}
 ```
-Если `securityCooldown ≠ null` и `deviceId` — не текущее устройство, клиент показывает плашку «Пароль изменён на „MacBook Air“ без старого пароля. Это не вы? → Отозвать».
+Смену пароля без старого клиент показывает по SSE `account.updated{password_changed_without_old}` (§5): карточка «Пароль изменён на „MacBook Air“ без старого пароля. Это не вы? → Отозвать устройство».
 
 ### 4.4 Устройства
 ```ts
@@ -550,10 +545,10 @@ type RevokeOthersResponse = { revokedCount: number };
 {"devices":[{"id":"9b1e2f4a-7c3d-4e5f-8a9b-0c1d2e3f4a5b","name":"Google Pixel 8","reportedName":"Google Pixel 8","customName":null,"platform":"android","osVersion":"16","model":"Google Pixel 8","clientVersion":"1.3.0","linkedVia":"register","linkedByDeviceId":null,"createdAt":"2026-09-23T10:00:00.000Z","lastSeenAt":"2026-09-23T10:05:00.000Z","lastSyncAt":"2026-09-23T10:04:00.000Z","recentUntil":null,"isCurrent":true}],"maxDevices":20}
 ```
 **`PATCH /auth/me/devices/{id}`:** `{"name":"Рабочий ноутбук"}` → 200 `DeviceDto`.
-- Ошибки: 404 `device_not_found`; 403 `recent_device_restricted`, `cooldown_restricted`, `invalid_password`; 429 `reauth_throttled`.
+- Ошибки: 404 `device_not_found`; 403 `recent_device_restricted`, `invalid_password`; 429 `reauth_throttled`.
 
 **`POST /auth/me/devices/{id}/revoke`:** `{}` или `{"password":"…"}` → 204.
-- Ошибки: 409 `cannot_revoke_current_device`; 404; 403 `recent_device_restricted`, `cooldown_restricted`, `invalid_password`; 429.
+- Ошибки: 409 `cannot_revoke_current_device`; 404; 403 `recent_device_restricted`, `invalid_password`; 429.
 - Порядок: commit → `session.invalidated{device_revoked}` адресно → `closeDevice` → `devices.updated{device_removed}`.
 
 **`POST /auth/me/devices/revoke-others`:** `{}` → `{"revokedCount":3}`. Те же правила для каждой цели. При 403 ни одно устройство не удаляется.
@@ -575,21 +570,17 @@ type RecoverRequest = { login: string; recoveryCode: string; newPassword: string
 {"currentPassword":"старый пароль","newPassword":"новый длинный пароль","signOutOtherDevices":true}
 ```
 ```json
-{"user":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-24T08:00:00.000Z","recoveryCodeStatus":{"createdAt":"2026-09-23T10:00:00.000Z","confirmed":true},"securityCooldown":null},"tokens":{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.c2ln","accessTokenExpiresAt":"2026-09-24T08:15:00.000Z","refreshToken":"mgrt1.eyJ0eXAiOiJyZWZyZXNoIn0.Qw9z","refreshTokenExpiresAt":"2026-12-23T08:00:00.000Z"},"signedOutDevices":2}
+{"user":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-24T08:00:00.000Z","recoveryCodeStatus":{"createdAt":"2026-09-23T10:00:00.000Z","confirmed":true}},"tokens":{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.c2ln","accessTokenExpiresAt":"2026-09-24T08:15:00.000Z","refreshToken":"mgrt1.eyJ0eXAiOiJyZWZyZXNoIn0.Qw9z","refreshTokenExpiresAt":"2026-12-23T08:00:00.000Z"},"signedOutDevices":2}
 ```
 - Всегда `auth_version+1`, потоки пользователя закрываются.
-- **Без `currentPassword`:**
-  - нужен возраст устройства ≥ `PASSWORD_RESET_DEVICE_MIN_AGE_DAYS`;
-  - устройство не должно было отзывать другие без пароля за последние 7 дней;
-  - устройство не под ограничениями кулдауна, и нет кулдауна с живым инициатором.
-
-  Тогда `signOutOtherDevices` принудительно `false`, запускается кулдаун, остальным уходит `account.updated{password_changed_without_old}`.
-- **Ошибки:** 403 `current_password_required{minDeviceAgeDays}`, `cooldown_restricted`, `invalid_password`; 400 `password_*`; 429 `reauth_throttled`.
+- **Без `currentPassword`** смена разрешена с **любого** вошедшего устройства (решение владельца продукта, DESIGN §4.8). `signOutOtherDevices` работает как обычно. Остальным устройствам (если они не вышли) уходит `account.updated{password_changed_without_old}`.
+- **С `currentPassword`:** неверный пароль → 403 `invalid_password` (счётчик reauth).
+- **Ошибки:** 403 `invalid_password`; 400 `password_*`; 429 `reauth_throttled`.
 
 **`POST /auth/me/recovery-code`**
 - Запрос: `{"password":"…"}`.
 - Ответ: `{"recoveryCode":"N3W0-ABCD-EFGH-JKMN-PQRS","createdAt":"2026-09-24T08:00:00.000Z"}`.
-- Ошибки: 403 `security_cooldown{retryAfterSeconds}`, `invalid_password`.
+- Ошибки: 403 `invalid_password`.
 - Остальным устройствам уходит `account.updated{recovery_code_rotated}`.
 
 **`POST /auth/me/recovery-code/confirm`**
@@ -598,7 +589,7 @@ type RecoverRequest = { login: string; recoveryCode: string; newPassword: string
 
 **`POST /auth/me/delete`**
 - Запрос: `{"password":"…"}` → 204.
-- Ошибки: 403 `security_cooldown`, `invalid_password`.
+- Ошибки: 403 `invalid_password`.
 - Удаление логическое и немедленное: логин освобождается, устройства удаляются, данные чистит фоновая задача (DESIGN §4.11).
 
 **`POST /auth/recover` → 200 `AuthSession`** (`recoveryCode` содержит новый код, `signedOutDevices` > 0)
@@ -606,7 +597,7 @@ type RecoverRequest = { login: string; recoveryCode: string; newPassword: string
 {"login":"maxim","recoveryCode":"7kq2 mx9d 4tnp b8rw 3hzf","newPassword":"новый длинный пароль","device":{"hwid":"3fa9c1d2e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1","name":"Google Pixel 8","platform":"android"}}
 ```
 - Ошибки: 400 `password_*`; 401 `invalid_recovery_code`; 429; 503.
-- Все прежние устройства удаляются, новое получает `linked_via='recovery'`, кулдаун снимается.
+- Все прежние устройства удаляются, новое получает `linked_via='recovery'`.
 - Прежним устройствам уходит `session.invalidated{recovery_reset}`.
 
 **`GET /auth/me/export` → 200 `ExportDocument`**
@@ -1092,9 +1083,6 @@ CREATE TABLE users (
   password_hash                TXT  NOT NULL,                                               -- PHC argon2id
   auth_version                 INT  NOT NULL DEFAULT 1,
   password_changed_at          TS   NOT NULL,
-  security_cooldown_until      TS   NULL,
-  security_cooldown_started_at TS   NULL,
-  security_cooldown_device_id  ID   NULL,                                                   -- без FK
   recovery_code_hash           ID   NOT NULL CHECK (length(recovery_code_hash) = 64),
   recovery_code_created_at     TS   NOT NULL,
   recovery_code_confirmed_at   TS   NULL,
@@ -1116,7 +1104,6 @@ CREATE TABLE devices (
   client_version              TXT NULL,
   linked_via                  TXT NOT NULL,                                                 -- register|login|link|recovery
   linked_by_device_id         ID  NULL,                                                     -- без FK
-  revoked_without_password_at TS  NULL,
   created_at                  TS  NOT NULL,
   last_seen_at                TS  NOT NULL,
   last_sync_at                TS  NULL,
@@ -1444,8 +1431,6 @@ lockUser(q, userId):   // первый оператор каждой сериа�
 | `RESERVED_LOGINS` | пусто | через запятую |
 | `MAX_DEVICES_PER_USER` | `20` | 0 = без лимита (`maxDevices: null`) |
 | `DEVICE_INACTIVE_DAYS` | `180` | |
-| `PASSWORD_RESET_DEVICE_MIN_AGE_DAYS` | `7` | |
-| `SECURITY_COOLDOWN_DAYS` | `7` | |
 | `NEW_DEVICE_RESTRICT_HOURS` | `24` | |
 | `LINK_TTL_SECONDS` | `300` | 60..900 |
 | `LINK_NETWORK_HINT` | `true` | `false` → `sameNetwork: null` (режим `lan`) |

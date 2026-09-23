@@ -43,7 +43,7 @@
 | 0.6 | Библиотека: часы, id и uuidv5, время (приём `\.\d{1,9}`, отдача `.sss`), строки (длины UTF-16, безопасная обрезка), семафор, токены (JWT, `mgrt1`, HMAC), выдача сессии `issueSession(q, …)`, `removeDevicesInTx` / `afterRemove` | `src/lib/**` |
 | 0.7 | Контракт: **все** zod-DTO из API §4 и §6 с `.meta({id})` и плоским `SyncOp`; типы и реестр op-обработчиков с заглушками (`deferred unknown_kind`); матрица безопасности как чистые функции с unit-тестами | `src/contract/**`, `src/modules/sync/ops/{types,index}.ts`, `src/modules/security/policy.ts` (+ `policy.test.ts`) |
 | 0.8 | Каркас приложения: `app.ts` (порядок регистрации), `context.ts`, `main.ts` (`serve` или CLI без fastify), `server.ts` (close-with-grace, draining, ротация epoch при `restore_pending`), `healthcheck.ts`, модуль `server` полностью (`/`, `/health`, `/health/live`, `/server/info`, `/openapi.json`), хаб live (`publish`, `publishCoalesced`, `closeDevice`, `closeUser`, `closeAll`) плюс каталог событий, **маршруты-заглушки всех модулей** (501 с полными схемами), планировщик задач | `src/{app,context,main,server,healthcheck}.ts`, `src/modules/server/**`, `src/modules/live/{live.hub,live.events}.ts`, `src/jobs/scheduler.ts`, route-файлы-заглушки всех модулей |
-| 0.9 | Тесты и генерация: `test-db.ts` (sqlite — временный файл; postgres — отдельная схема на файл), `test-app.ts`, `factories.ts` (пользователь, устройство, токен без HTTP), контрактные тесты, генераторы OpenAPI и кодов ошибок, `spec/LICENSE` | `src/test/**`, `scripts/{gen-openapi,gen-error-codes}.ts`, `openapi/*`, `spec/error-codes.json`, `spec/LICENSE` |
+| 0.9 | Лицензия спецификации: `spec/LICENSE` и `openapi/LICENSE` (CC0-1.0), SPDX `CC0-1.0` в генерируемых `openapi/*` и `spec/*` (DESIGN §12). Тесты и генерация: `test-db.ts` (sqlite — временный файл; postgres — отдельная схема на файл), `test-app.ts`, `factories.ts` (пользователь, устройство, токен без HTTP), контрактные тесты, генераторы OpenAPI и кодов ошибок, `spec/LICENSE` | `src/test/**`, `scripts/{gen-openapi,gen-error-codes}.ts`, `openapi/*`, `spec/error-codes.json`, `spec/LICENSE` |
 | 0.10 | Сборка и CI: нормативный Dockerfile (DESIGN §7.1), лаунчер, `.dockerignore`, `compose.dev.yml` (PG 18 с `en_US.UTF-8`, порт 55432), `scripts/smoke.sh`, `ci.yml` (static, test × {sqlite, pg18}, docker amd64 + arm64 smoke), dependabot, Actions закреплены по SHA | `Dockerfile`, `docker/melogold`, `.dockerignore`, `compose.dev.yml`, `scripts/smoke.sh`, `.github/workflows/ci.yml`, `.github/dependabot.yml` |
 | 0.11 | Документация для агентов: правила переносимого SQL и транзакций | `docs/database.md` |
 
@@ -89,24 +89,24 @@
 - **Владеет:** `src/modules/devices/**`.
 - **Делает:**
   - `GET/PATCH /auth/me/devices*`, `revoke`, `revoke-others` по `security/policy.ts`;
-  - `revoked_without_password_at`, reauth-троттлинг, `recentUntil` в DTO;
+  - reauth-троттлинг, `recentUntil` в DTO;
   - `touchLastSync`, задача очистки неактивных устройств через `removeDevicesInTx`.
 - **Приёмка:**
-  - `devices-matrix.int`: каждый сценарий DESIGN §4.8 — новое устройство без пароля → `recent_device_restricted`, с паролем → ok; инициатор кулдауна → `cooldown_restricted` даже с паролем; устройство владельца отзывает инициатора без пароля; rename чужого новым устройством;
+  - `devices-matrix.int`: каждый сценарий DESIGN §4.8 — новое устройство без пароля → `recent_device_restricted`, с паролем → ok; rename чужого новым устройством;
   - `revoke.int`: `cannot_revoke_current_device`; порядок SSE (`session.invalidated` → закрытие → `devices.updated`); привязки с этим одобряющим → `cancelled`;
   - `cascade.int` (SQLite и PG): удаление устройства удаляет его токены.
 
 ### T1.3 Аккаунт: пароль, код восстановления, recover, удаление, экспорт
 - **Владеет:** `src/modules/account/**` (`account.routes.ts`, `account.service.ts`, `recovery-code.ts`, `export.ts`, `purge.job.ts`).
 - **Делает:**
-  - `me/password` со старым и без старого (возраст, отзыв без пароля за 7 дней, кулдаун со `started_at` и `device_id`, `account.updated`);
-  - `me/recovery-code` и `/confirm`, `recover` (CAS кода, удаление всех устройств, снятие кулдауна);
+  - `me/password` со старым и без старого (без старого — с любого вошедшего устройства, `account.updated{password_changed_without_old}`);
+  - `me/recovery-code` и `/confirm`, `recover` (CAS кода, удаление всех устройств);
   - `me/delete` (логическое удаление, переименование логина);
   - задача `account-purge` (пачки по 5000);
   - потоковый `export` keyset-страницами.
 - **Приёмка:**
   - `recover.int`: из двух параллельных recover одним кодом проходит один; неизвестный логин ≡ неверный код; старые устройства → `session_revoked`; выдан новый код;
-  - `password-cooldown.int`: сценарии M6 в обоих порядках (сначала revoke-others, затем смена без старого → `current_password_required`; сначала смена без старого, затем инициатор не может отозвать) плюс вход вора новым паролем → ограничен;
+  - `password-change.int`: смена без старого с любого вошедшего устройства проходит, остальные получают `account.updated{password_changed_without_old}`; со старым — неверный пароль → `invalid_password`;
   - `delete-account.int`: логин сразу свободен; устройства удалены; `session.invalidated{account_deleted}`; после `jobs run account-purge` строк пользователя нет ни в одной таблице; удаление при 100k элементов не держит писателя дольше 2 с на пачку;
   - `export.int`: секретов нет; структура по API; 3/ч.
 
