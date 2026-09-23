@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ALL_ERROR_CODES, CLIENT_LOCAL_OP_CODES, ERROR_CODES, OP_RESULT_CODES } from "../src/http/error-codes.ts";
 import type { OpResultCode } from "../src/http/error-codes.ts";
+import { isEntryPoint } from "../src/lib/entry-point.ts";
 
 export type ErrorCodesDocument = Readonly<{
   $comment: string;
@@ -51,7 +52,7 @@ export function errorCodesJson(): string {
   return `${JSON.stringify(errorCodesDocument(), null, 2)}\n`;
 }
 
-if (import.meta.main) {
+if (isEntryPoint(import.meta.url)) {
   const root = new URL("../", import.meta.url);
   mkdirSync(new URL("spec/", root), { recursive: true });
   const file = new URL("spec/error-codes.json", root);

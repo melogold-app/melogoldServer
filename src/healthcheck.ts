@@ -4,6 +4,7 @@
  */
 import { request } from "node:http";
 import { loadEnv } from "./config/env.ts";
+import { isEntryPoint } from "./lib/entry-point.ts";
 
 export const HEALTHCHECK_TIMEOUT_MS = 4000;
 
@@ -35,7 +36,7 @@ export function checkHealth(host: string, port: number, timeoutMs: number = HEAL
   });
 }
 
-if (import.meta.main) {
+if (isEntryPoint(import.meta.url)) {
   const env = loadEnv();
   process.exitCode = (await checkHealth(env.HOST, env.PORT)) ? 0 : 1;
 }

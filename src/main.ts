@@ -7,6 +7,7 @@
  * The image's launcher `docker/melogold` calls `main(process.argv.slice(2))`; `node src/main.ts serve` (npm start,
  * npm run dev) runs it directly.
  */
+import { isEntryPoint } from "./lib/entry-point.ts";
 
 export async function main(argv: readonly string[]): Promise<void> {
   const [command = "serve", ...rest] = argv;
@@ -19,4 +20,4 @@ export async function main(argv: readonly string[]): Promise<void> {
   process.exitCode = await runCli([command, ...rest]);
 }
 
-if (import.meta.main) await main(process.argv.slice(2));
+if (isEntryPoint(import.meta.url)) await main(process.argv.slice(2));
