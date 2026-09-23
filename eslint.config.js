@@ -158,7 +158,7 @@ export default defineConfig(
     rules: {
       "melogold/relative-import-extension": "error",
       eqeqeq: ["error", "always"],
-      "no-duplicate-imports": "error",
+      "no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
       "prefer-const": "error",
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
       "@typescript-eslint/consistent-type-imports": [

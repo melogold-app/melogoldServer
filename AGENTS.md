@@ -17,6 +17,7 @@
   - относительные импорты с расширением `.ts` (`import { x } from "./x.ts"`);
   - только стираемый синтаксис (`erasableSyntaxOnly`): без `enum`, `namespace`, декораторов и parameter properties;
   - импорт типов через `import type` (`verbatimModuleSyntax`).
+- Длины строк считаются в единицах UTF-16 (API §1.4). В zod 4.6 `.min()`, `.max()` и `.length()` у строк считают кодовые точки, поэтому лимиты строк проверяются через `value.length`.
 - Fastify 5, zod 4 (`fastify-type-provider-zod`), OpenAPI 3.0.3, Kysely 0.29 (SQLite через better-sqlite3 и PostgreSQL 18 через `pg`), argon2id.
 
 ## Команды
