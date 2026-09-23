@@ -195,7 +195,9 @@ if (updated.numUpdatedRows !== 1n) { /* проиграли гонку */ }
 
 ## 6. Диалекты во время выполнения (только `src/db/**`)
 
-- **SQLite:** одно соединение на процесс; PRAGMA из API §9.4; `auto_vacuum=INCREMENTAL` для новой базы. Второе соединение к тому же файлу в том же процессе открывать нельзя: `better-sqlite3` синхронный и в `busy_timeout` блокирует цикл событий, поэтому первое соединение не может закончить транзакцию, и через `busy_timeout` приходит `SQLITE_BUSY`. Другие процессы (CLI, бэкап) ждут `busy_timeout` на `BEGIN IMMEDIATE` — это нормально.
+- **Выбор диалекта** — только `DATABASE_URL`: `sqlite://<путь>`, `postgres://` или `postgresql://`. `sqlite::memory:` — только тесты и генерация OpenAPI.
+- **В образе** (DESIGN §7.1) база по умолчанию — `sqlite:///data/melogold.db` на томе `/data`; рядом лежат её `-wal`/`-shm`, `secret.key` и `.tmp/`. Корень контейнера только для чтения, поэтому всё, что пишет процесс, живёт в `DATA_DIR`. Копия базы — `VACUUM INTO` в `/data/.tmp` (бэкап, PLAN T3.1), а не копирование файла.
+- **SQLite:** одно соединение на процесс; PRAGMA из API §9.4; `auto_vacuum=INCREMENTAL` для новой базы; `PRAGMA optimize` при открытии и раз в 6 ч (`optimizeSqlite` из `dialect-sqlite.ts`, задачу планировщика добавляет PLAN T3.1). Второе соединение к тому же файлу в том же процессе открывать нельзя: `better-sqlite3` синхронный и в `busy_timeout` блокирует цикл событий, поэтому первое соединение не может закончить транзакцию, и через `busy_timeout` приходит `SQLITE_BUSY`. Другие процессы (CLI, бэкап) ждут `busy_timeout` на `BEGIN IMMEDIATE` — это нормально.
 - **SQLite:** после некоторых ошибок (`SQLITE_FULL`, `SQLITE_IOERR`) SQLite сам откатывает транзакцию; драйвер тогда не шлёт `ROLLBACK`, чтобы не подменить исходную ошибку (`storage_full`).
 - **PostgreSQL:** пул `DATABASE_POOL_MAX`, `statement_timeout = DATABASE_STATEMENT_TIMEOUT_MS` (превышение → `server_busy`), `application_name = melogold`. Таблицы неквалифицированные, живут в `current_schema()`; интроспекция смотрит только туда.
 - Ошибки драйверов → коды API §2.4 — только в `errors.ts`.
@@ -203,6 +205,7 @@ if (updated.numUpdatedRows !== 1n) { /* проиграли гонку */ }
 ## 7. Тесты
 
 - Каждый новый запрос покрыт интеграционным тестом `*.int.test.ts`, который проходит **на обоих диалектах**: `npm test` (SQLite, временный файл, WAL) и `npm run db:up && npm run test:pg` (PostgreSQL 18 с локалью `en_US.UTF-8`, отдельная схема на тестовый файл, файлы идут параллельно).
+- CI (`.github/workflows/ci.yml`, задача `test`) гоняет оба прогона на каждый push и PR: PostgreSQL поднимается тем же `compose.dev.yml`, и шаг проверяет, что `datcollate` базы — `en_US.UTF-8`. Задача не принята, пока не зелёные оба.
 - База с миграциями: `createMigratedTestDatabase()` из `src/test/test-db.ts` → `{ database, db }`; в `after` — `db.destroy()`, затем `database.cleanup()`.
 - Второй независимый писатель: в PostgreSQL — `database.openDb()` (свой пул); в SQLite — дочерний процесс (см. `tx.int.test.ts`), не второе соединение в том же процессе.
 - Обязательные регрессии слоя БД уже есть: M10 (join `sync_playlist_items → sync_tracks` на `en_US.UTF-8`, `migrate.int.test.ts`), M11 (ограничение с `ON CONFLICT` внутри `db.write`, `heads.int.test.ts` и `tx.int.test.ts`), вложенность, `lockUser` первым, `ensureHead`, 20 параллельных писателей одного пользователя.
