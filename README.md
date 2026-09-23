@@ -22,7 +22,12 @@
 
 ## Статус
 
-В разработке. Планируемый стек: Node.js 22, TypeScript, Fastify, PostgreSQL 16, описание API в OpenAPI.
+В разработке. Стек: Node.js 24, TypeScript, Fastify 5, Kysely (SQLite по умолчанию или PostgreSQL), OpenAPI 3.0.
+
+Документация:
+- [Архитектура](docs/DESIGN.md)
+- [Контракт API](docs/API.md) — единый для всех клиентов
+- [План реализации](docs/PLAN.md)
 
 ## Лицензия
 
