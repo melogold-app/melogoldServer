@@ -156,7 +156,14 @@ export const COLUMN_TYPES: ColumnTypes = Object.freeze({
 // Schema model (what the executed statements produce)
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type ModelColumn = Readonly<{ name: string; type: LogicalType; nullable: boolean; hasDefault: boolean }>;
+export type ModelColumn = Readonly<{
+  name: string;
+  type: LogicalType;
+  nullable: boolean;
+  hasDefault: boolean;
+  /** The constant of `DEFAULT` (rule 6), `null` without one. */
+  default: string | number | null;
+}>;
 /** A `CREATE INDEX` (constraint indexes of `PRIMARY KEY` and `UNIQUE` are not indexes of the model). */
 export type ModelIndex = Readonly<{
   name: string;
@@ -391,6 +398,7 @@ export function ddl(dialect: SqlDialect): Ddl {
       type: spec.type,
       nullable: spec.nullable === true,
       hasDefault: spec.default !== undefined,
+      default: spec.default ?? null,
     });
   }
 

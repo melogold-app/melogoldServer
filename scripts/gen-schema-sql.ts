@@ -1,7 +1,7 @@
 /**
  * `npm run schema:sql`: renders the migrations (src/db/migrations) without a database and writes
  * - docs/schema.sqlite.sql and docs/schema.postgres.sql: the DDL each dialect executes (API §9.1 rule 9);
- * - src/db/schema.snapshot.json: tables, columns (logical type, nullability), constraints (primary key, `UNIQUE`,
+ * - src/db/schema.snapshot.json: tables, columns (logical type, nullability, `DEFAULT` constant), constraints (primary key, `UNIQUE`,
  *   foreign keys, `CHECK`) and index definitions, compared with the live database at startup (`schema-check.ts`,
  *   DESIGN §6.2);
  * - src/db/types.ts: the Kysely table types.
@@ -54,7 +54,7 @@ function sqlFile(dialect: SqlDialect, rendered: Rendered): string {
 
 type SnapshotIndex = { name: string; columns: string[]; unique: boolean; where: string | null };
 type SnapshotTable = {
-  columns: { name: string; type: LogicalType; nullable: boolean }[];
+  columns: { name: string; type: LogicalType; nullable: boolean; default: string | number | null }[];
   primaryKey: string[];
   unique: string[][];
   foreignKeys: ModelForeignKey[];
@@ -67,7 +67,12 @@ function snapshot(model: SchemaModel): Snapshot {
   const tables: Snapshot["tables"] = {};
   for (const table of model.tables.values()) {
     tables[table.name] = {
-      columns: table.columns.map((column) => ({ name: column.name, type: column.type, nullable: column.nullable })),
+      columns: table.columns.map((column) => ({
+        name: column.name,
+        type: column.type,
+        nullable: column.nullable,
+        default: column.default,
+      })),
       primaryKey: [...table.primaryKey],
       unique: table.unique.map((columns) => [...columns]),
       foreignKeys: table.foreignKeys.map((foreignKey) => ({ ...foreignKey })),

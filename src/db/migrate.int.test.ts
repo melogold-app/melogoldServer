@@ -223,6 +223,7 @@ describe(`schema check (${TEST_DIALECT})`, () => {
               "column play_stats.user_id is NULL, expected the opposite",
               'column play_stats.video_id has type text, expected text COLLATE "C" (ID)',
               "column play_stats.total_ms has type text, expected bigint (BIG)",
+              "column play_stats.total_ms has DEFAULT none, expected 0",
               "table play_stats has primary key (video_id), expected (user_id, video_id)",
               "foreign key (user_id) REFERENCES users(id) ON DELETE CASCADE on play_stats is missing",
               "check (length(video_id) = 11) on play_stats is missing",
@@ -233,6 +234,7 @@ describe(`schema check (${TEST_DIALECT})`, () => {
               "table play_stats is not STRICT",
               "column play_stats.user_id is NULL, expected the opposite",
               "column play_stats.total_ms has type TEXT, expected INTEGER (BIG)",
+              "column play_stats.total_ms has DEFAULT none, expected 0",
               "column play_stats.last_played_at has type BIGINT, expected INTEGER (TS)",
               "column play_stats.seq has type BIGINT, expected INTEGER (BIG)",
               "table play_stats has primary key (video_id), expected (user_id, video_id)",
@@ -246,7 +248,7 @@ describe(`schema check (${TEST_DIALECT})`, () => {
     });
   });
 
-  test("constraint and index-definition drift is a problem; strict refuses to start", async () => {
+  test("constraint, DEFAULT and index-definition drift is a problem; strict refuses to start", async () => {
     await withMigratedDb(async (db) => {
       const run = (statement: string) => sql.raw(statement).execute(db.kysely);
       // Same index names, other definitions (both dialects).
@@ -268,7 +270,13 @@ describe(`schema check (${TEST_DIALECT})`, () => {
         await run("ALTER TABLE devices DROP CONSTRAINT devices_user_id_fkey");
         await run("ALTER TABLE sync_heads DROP CONSTRAINT sync_heads_epoch_check");
         await run("ALTER TABLE sync_heads ADD CONSTRAINT sync_heads_epoch_check CHECK (length(epoch) BETWEEN 8 AND 9)");
+        await run("ALTER TABLE sync_heads ALTER COLUMN seq SET DEFAULT 5");
+        await run("ALTER TABLE sync_heads ALTER COLUMN floor_seq DROP DEFAULT");
+        await run("ALTER TABLE users ALTER COLUMN created_by SET DEFAULT 'other'");
         expected.push(
+          "column users.created_by has DEFAULT 'other', expected 'self'",
+          "column sync_heads.seq has DEFAULT 5, expected 0",
+          "column sync_heads.floor_seq has DEFAULT none, expected 0",
           "index users_deleted has predicate WHERE (deleted_at IS NULL), expected WHERE deleted_at IS NOT NULL",
           "unique (login) on users is missing",
           "check (length(video_id) = 11) on sync_tracks is missing",
@@ -289,7 +297,9 @@ describe(`schema check (${TEST_DIALECT})`, () => {
         await rebuild("sync_heads", (text) =>
           text
             .replace(" REFERENCES users(id) ON DELETE CASCADE", "")
-            .replace("CHECK (length(epoch) = 8)", "CHECK (length(epoch) BETWEEN 8 AND 9)"),
+            .replace("CHECK (length(epoch) = 8)", "CHECK (length(epoch) BETWEEN 8 AND 9)")
+            .replace(/(\bseq\s+INTEGER NOT NULL) DEFAULT 0/, "$1 DEFAULT 5")
+            .replace(/(\bfloor_seq\s+INTEGER NOT NULL) DEFAULT 0/, "$1"),
         );
         await rebuild("refresh_tokens", (text) =>
           text.replace("token_hash                TEXT NOT NULL UNIQUE", "token_hash TEXT NOT NULL"),
@@ -299,6 +309,8 @@ describe(`schema check (${TEST_DIALECT})`, () => {
           "foreign key (user_id) REFERENCES users(id) ON DELETE CASCADE on sync_heads is missing",
           "check (length(epoch) = 8) on sync_heads is missing",
           "unique (token_hash) on refresh_tokens is missing",
+          "column sync_heads.seq has DEFAULT 5, expected 0",
+          "column sync_heads.floor_seq has DEFAULT none, expected 0",
         );
       }
       extras.push(/^check \(.*length\(epoch\).*9.*\) on sync_heads is not in the snapshot$/);
@@ -338,7 +350,7 @@ describe(`schema check (${TEST_DIALECT})`, () => {
       ]);
       const snapshot = loadSchemaSnapshot();
       const table = { unique: [], foreignKeys: [], checks: [], indexes: [], primaryKey: ["id"] };
-      const id = { name: "id", type: "ID", nullable: false } as const;
+      const id = { name: "id", type: "ID", nullable: false, default: null } as const;
       const withTables: typeof snapshot = {
         ...snapshot,
         tables: {
@@ -346,7 +358,7 @@ describe(`schema check (${TEST_DIALECT})`, () => {
           fk_parent: { ...table, columns: [id] },
           fk_child: {
             ...table,
-            columns: [id, { name: "parent_id", type: "ID", nullable: true }],
+            columns: [id, { name: "parent_id", type: "ID", nullable: true, default: null }],
             foreignKeys: [{ columns: ["parent_id"], table: "fk_parent", references: ["id"], onDelete: null }],
           },
         },

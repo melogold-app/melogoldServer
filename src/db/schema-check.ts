@@ -10,7 +10,7 @@
  * What is compared:
  * - every snapshot table exists; on SQLite it is `STRICT`;
  * - every snapshot column exists with the physical type of its logical type (API §9.1, including `COLLATE "C"` of
- *   `ID` on PostgreSQL) and the same nullability;
+ *   `ID` on PostgreSQL), the same nullability and the same `DEFAULT` constant (PostgreSQL's casts removed);
  * - the constraints: the primary key (columns in order), `UNIQUE` constraints, foreign keys (columns, referenced
  *   table and columns, `ON DELETE`) and `CHECK` expressions. Expressions are compared in the canonical form of
  *   `sql-expression.ts`, so SQLite's verbatim text and PostgreSQL's deparsed text of the same `CHECK` are equal;
@@ -33,7 +33,14 @@ const snapshotSchema = z.object({
   tables: z.record(
     z.string(),
     z.object({
-      columns: z.array(z.object({ name: z.string(), type: z.enum(LOGICAL_TYPES), nullable: z.boolean() })),
+      columns: z.array(
+        z.object({
+          name: z.string(),
+          type: z.enum(LOGICAL_TYPES),
+          nullable: z.boolean(),
+          default: z.union([z.string(), z.number()]).nullable(),
+        }),
+      ),
       primaryKey: z.array(z.string()),
       unique: z.array(z.array(z.string())),
       foreignKeys: z.array(
@@ -74,6 +81,8 @@ export type LiveColumn = Readonly<{
   /** SQLite: the declared type (`TEXT`, `INTEGER`); PostgreSQL: `data_type` plus `COLLATE "<name>"` when set. */
   physical: string;
   nullable: boolean;
+  /** The `DEFAULT` expression as the database returns it (SQLite: verbatim; PostgreSQL: deparsed), or `null`. */
+  default: string | null;
 }>;
 
 export type LiveForeignKey = Readonly<{
@@ -143,8 +152,8 @@ async function introspectSqlite(kysely: QueryExecutorProvider): Promise<LiveSche
   const tables = new Map<string, LiveTable>();
   const indexes = new Map<string, LiveIndex>();
   for (const { name, strict, sql: createTable } of tableRows.rows) {
-    const columnRows = await sql<{ name: string; type: string; notnull: number; pk: number }>`
-      SELECT name, type, "notnull", pk FROM pragma_table_info(${name}) ORDER BY cid
+    const columnRows = await sql<{ name: string; type: string; notnull: number; pk: number; default: string | null }>`
+      SELECT name, type, "notnull", pk, dflt_value AS "default" FROM pragma_table_info(${name}) ORDER BY cid
     `.execute(kysely);
     const foreignKeyRows = await sql<{ id: number; table: string; from: string; to: string; onDelete: string }>`
       SELECT id, "table", "from", "to", on_delete AS "onDelete" FROM pragma_foreign_key_list(${name}) ORDER BY id, seq
@@ -180,6 +189,7 @@ async function introspectSqlite(kysely: QueryExecutorProvider): Promise<LiveSche
         name: column.name,
         physical: column.type.toUpperCase(),
         nullable: column.notnull === 0,
+        default: column.default,
       })),
       primaryKey: columnRows.rows
         .filter((column) => column.pk > 0)
@@ -207,9 +217,10 @@ async function introspectPostgres(kysely: QueryExecutorProvider): Promise<LiveSc
     dataType: string;
     collation: string | null;
     isNullable: string;
+    default: string | null;
   }>`
     SELECT table_name AS "table", column_name AS name, data_type AS "dataType", collation_name AS collation,
-           is_nullable AS "isNullable"
+           is_nullable AS "isNullable", column_default AS "default"
     FROM information_schema.columns
     WHERE table_schema = current_schema()
     ORDER BY table_name, ordinal_position
@@ -221,6 +232,7 @@ async function introspectPostgres(kysely: QueryExecutorProvider): Promise<LiveSc
       name: row.name,
       physical: row.collation === null ? row.dataType : `${row.dataType} COLLATE "${row.collation}"`,
       nullable: row.isNullable === "YES",
+      default: row.default,
     });
     columns.set(row.table, list);
   }
@@ -338,6 +350,29 @@ function compareSets<E, L>(
   for (const candidate of remaining) if (!candidate.used) out.extras.push(describe.extra(candidate.item));
 }
 
+/** A snapshot `DEFAULT` constant as SQL (the form `ddl.ts` renders): `0`, `'self'`. */
+function snapshotDefault(value: string | number): string {
+  return typeof value === "number" ? String(value) : `'${value.replaceAll("'", "''")}'`;
+}
+
+/**
+ * A live `DEFAULT` in the form of {@link snapshotDefault}. SQLite returns the text of the migration (`0`, `'self'`);
+ * PostgreSQL deparses it with casts (`'self'::text`, `'-1'::integer`) and may wrap it in brackets.
+ */
+export function comparableDefault(text: string): string {
+  let value = text.trim();
+  for (;;) {
+    const next = value
+      .replace(/::[a-z_][a-z0-9_ ]*(?:\([0-9, ]*\))?(?:\[\])?$/i, "")
+      .replace(/^\((.*)\)$/s, "$1")
+      .trim();
+    if (next === value) break;
+    value = next;
+  }
+  const quotedInteger = /^'(-?[0-9]+)'$/.exec(value);
+  return quotedInteger?.[1] ?? value;
+}
+
 /** Compares a live schema with the snapshot (pure). */
 export function compareSchema(snapshot: SchemaSnapshot, live: LiveSchema, dialect: SqlDialect): SchemaDiff {
   const problems: string[] = [];
@@ -363,6 +398,11 @@ export function compareSchema(snapshot: SchemaSnapshot, live: LiveSchema, dialec
       }
       if (liveColumn.nullable !== column.nullable) {
         problems.push(`column ${where} is ${liveColumn.nullable ? "NULL" : "NOT NULL"}, expected the opposite`);
+      }
+      const expectedDefault = column.default === null ? null : snapshotDefault(column.default);
+      const liveDefault = liveColumn.default === null ? null : comparableDefault(liveColumn.default);
+      if (liveDefault !== expectedDefault) {
+        problems.push(`column ${where} has DEFAULT ${liveDefault ?? "none"}, expected ${expectedDefault ?? "none"}`);
       }
       liveColumns.delete(column.name);
     }
