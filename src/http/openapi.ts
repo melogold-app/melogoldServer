@@ -51,9 +51,42 @@ const DROPPED_KEYWORDS = new Set([
 const SINGLE_SCHEMA_KEYWORDS = new Set(["items", "additionalProperties", "not"]);
 const SCHEMA_LIST_KEYWORDS = new Set(["allOf", "anyOf", "oneOf"]);
 
-/** Removes {@link DROPPED_KEYWORDS} and `additionalProperties: false`, walking only schema positions. */
-export function sanitizeSchema(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sanitizeSchema);
+/** The `type` of each component, to give a nullable reference its type (OpenAPI 3.0 needs it next to `nullable`). */
+type ComponentTypes = ReadonlyMap<string, string>;
+
+function refTarget(schema: JsonSchema): string | null {
+  const ref = schema.$ref;
+  return typeof ref === "string" && ref.startsWith(COMPONENT_PREFIX) ? ref.slice(COMPONENT_PREFIX.length) : null;
+}
+
+/**
+ * A reference wrapped by zod in a one-element `allOf`:
+ * - without siblings (an optional reference) it becomes the plain `$ref`;
+ * - `nullable: true` gets the `type` of the component: OpenAPI 3.0.3 applies `nullable` only with a `type` in the
+ *   same schema object (and Redocly's `nullable-type-sibling` requires it).
+ */
+function simplifyReference(schema: JsonSchema, types: ComponentTypes): JsonSchema {
+  const allOf = schema.allOf;
+  if (!Array.isArray(allOf) || allOf.length !== 1) return schema;
+  const [only] = allOf as unknown[];
+  if (typeof only !== "object" || only === null) return schema;
+  const target = refTarget(only as JsonSchema);
+  if (target === null) return schema;
+  const siblings = Object.keys(schema).filter((key) => key !== "allOf");
+  if (siblings.length === 0) return only as JsonSchema;
+  if (schema.nullable === true && schema.type === undefined) {
+    const type = types.get(target);
+    if (type !== undefined) return { type, ...schema };
+  }
+  return schema;
+}
+
+/**
+ * Removes {@link DROPPED_KEYWORDS} and `additionalProperties: false`, simplifies wrapped references, walking only
+ * schema positions.
+ */
+export function sanitizeSchema(value: unknown, types: ComponentTypes = new Map()): unknown {
+  if (Array.isArray(value)) return value.map((item) => sanitizeSchema(item, types));
   if (typeof value !== "object" || value === null) return value;
   const result: JsonSchema = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
@@ -61,14 +94,14 @@ export function sanitizeSchema(value: unknown): unknown {
     if (key === "additionalProperties" && child === false) continue;
     if (key === "properties" && typeof child === "object" && child !== null) {
       const properties = Object.entries(child as Record<string, unknown>);
-      result[key] = Object.fromEntries(properties.map(([name, item]) => [name, sanitizeSchema(item)]));
+      result[key] = Object.fromEntries(properties.map(([name, item]) => [name, sanitizeSchema(item, types)]));
     } else if (SINGLE_SCHEMA_KEYWORDS.has(key) || SCHEMA_LIST_KEYWORDS.has(key)) {
-      result[key] = sanitizeSchema(child);
+      result[key] = sanitizeSchema(child, types);
     } else {
       result[key] = child;
     }
   }
-  return result;
+  return simplifyReference(result, types);
 }
 
 function renderRegistry(direction: ComponentDirection): Record<string, JsonSchema> {
@@ -89,8 +122,12 @@ function renderRegistry(direction: ComponentDirection): Record<string, JsonSchem
 /** `components.schemas`: every contract component once, sorted by name. */
 export function renderComponents(): Record<string, JsonSchema> {
   const rendered = { ...renderRegistry("request"), ...renderRegistry("response") };
+  const types = new Map<string, string>();
+  for (const [id, schema] of Object.entries(rendered)) {
+    if (typeof schema.type === "string") types.set(id, schema.type);
+  }
   const sorted: Record<string, JsonSchema> = {};
-  for (const id of Object.keys(rendered).sort()) sorted[id] = sanitizeSchema(rendered[id]) as JsonSchema;
+  for (const id of Object.keys(rendered).sort()) sorted[id] = sanitizeSchema(rendered[id], types) as JsonSchema;
   return sorted;
 }
 

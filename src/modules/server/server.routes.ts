@@ -46,6 +46,8 @@ export function registerServerRoutes(app: FastifyInstance, ctx: AppContext): voi
         description: "503 `unavailable` while the server shuts down or without the database (API §4.2).",
         status: 200,
         response: HealthResponse,
+        database: false,
+        errors: ["unavailable"],
       }),
     },
     () => checkReadiness(ctx),

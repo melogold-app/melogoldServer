@@ -1,0 +1,10 @@
+# Redocly CLI (npm run openapi:lint; CI "static", DESIGN §10) for the generated openapi/openapi.json.
+extends:
+  - recommended
+rules:
+  # API §6: every *Payload is a component (CI checks it) although LiveEvent.payload is a free-form object: the API has
+  # no polymorphism (API §1.3), so nothing references them.
+  no-unused-components: off
+  # DESIGN §10: every operation has a 4xx answer. The probes GET /health and GET /health/live take no input and answer
+  # only 200 or 5xx; they are listed in .redocly.lint-ignore.yaml.
+  operation-4xx-response: error

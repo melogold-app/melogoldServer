@@ -40,6 +40,13 @@ export type TestDatabase = Readonly<{
   searchPath: string | undefined;
   /** SQLite: the database file; PostgreSQL: the schema name. For messages. */
   location: string;
+  /**
+   * `DATABASE_URL` that reaches this database from `startServer` or a child process: the SQLite file, or the
+   * PostgreSQL URL with `options=-c search_path=<schema>`.
+   */
+  url: string;
+  /** Environment variables pointing at this database (`NODE_ENV=test`, `DATA_DIR`, `DATABASE_URL`). */
+  envVars: Readonly<Record<string, string>>;
   /** Opens one more independent connection (pool) to the same database: "another process". */
   openKysely<DB>(options?: Omit<OpenKyselyOptions, "searchPath">): OpenedKysely<DB>;
   /** Opens `ctx.db` (`createDb`) on the same database, over its own connection (pool). */
@@ -57,12 +64,15 @@ export async function createTestDatabase(options: CreateTestDatabaseOptions = {}
   if (TEST_DIALECT === "sqlite") {
     const directory = mkdtempSync(join(tmpdir(), "melogold-test-"));
     const file = join(directory, "melogold.db");
-    const env = parseEnv({ NODE_ENV: "test", DATA_DIR: directory, DATABASE_URL: `sqlite://${file}`, ...options.env });
+    const envVars = { NODE_ENV: "test", DATA_DIR: directory, DATABASE_URL: `sqlite://${file}`, ...options.env };
+    const env = parseEnv(envVars);
     return Object.freeze({
       dialect: "sqlite",
       env,
       searchPath: undefined,
       location: file,
+      url: `sqlite://${file}`,
+      envVars: Object.freeze(envVars),
       openKysely: <DB>(openOptions: Omit<OpenKyselyOptions, "searchPath"> = {}) => openKysely<DB>(env, openOptions),
       openDb: (dbOptions: DbOptions = {}) => dbFromKysely(openKysely<Database>(env, dbOptions), dbOptions),
       cleanup: () => {
@@ -81,17 +91,36 @@ export async function createTestDatabase(options: CreateTestDatabaseOptions = {}
   } finally {
     await admin.end();
   }
-  const env = parseEnv({ NODE_ENV: "test", DATABASE_URL: url, DATABASE_POOL_MAX: "5", ...options.env });
+  const dataDir = mkdtempSync(join(tmpdir(), "melogold-test-"));
+  const env = parseEnv({
+    NODE_ENV: "test",
+    DATA_DIR: dataDir,
+    DATABASE_URL: url,
+    DATABASE_POOL_MAX: "5",
+    ...options.env,
+  });
+  const scopedUrl = new URL(url);
+  scopedUrl.searchParams.set("options", `-c search_path=${schema}`);
+  const envVars = {
+    NODE_ENV: "test",
+    DATA_DIR: dataDir,
+    DATABASE_URL: scopedUrl.toString(),
+    DATABASE_POOL_MAX: "5",
+    ...options.env,
+  };
   return Object.freeze({
     dialect: "postgres",
     env,
     searchPath: schema,
     location: schema,
+    url: scopedUrl.toString(),
+    envVars: Object.freeze(envVars),
     openKysely: <DB>(openOptions: Omit<OpenKyselyOptions, "searchPath"> = {}) =>
       openKysely<DB>(env, { ...openOptions, searchPath: schema }),
     openDb: (dbOptions: DbOptions = {}) =>
       dbFromKysely(openKysely<Database>(env, { ...dbOptions, searchPath: schema }), dbOptions),
     cleanup: async () => {
+      rmSync(dataDir, { recursive: true, force: true });
       const client = new pg.Client({ connectionString: url });
       await client.connect();
       try {
