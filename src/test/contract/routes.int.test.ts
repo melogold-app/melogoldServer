@@ -4,12 +4,15 @@
  * - closed by default: every Bearer route answers `401 unauthorized` without a token, public routes never do;
  * - every M0 stub answers `501 not_implemented` after authentication and validation (a valid request), and `400` for
  *   an invalid body, which proves validation runs first;
- * - every error is the 4-key envelope with a registered code; an unknown route is `404 not_found`;
+ * - every error is the 4-key envelope with a registered code; an unknown route is `404 not_found`; so is a path
+ *   Fastify rejects before routing;
+ * - M12 on the real contract routes: Int32 overflow of `PUT /playback/state`, sanitization of `POST /auth/login`;
+ * - `DELETE` has no body whatever its `Content-Type`;
  * - every observed error status is documented for its operation (except 501, which is never documented).
  */
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
-import type { InjectOptions, RouteOptions } from "fastify";
+import type { FastifyReply, FastifyRequest, InjectOptions, RouteOptions } from "fastify";
 import type { z } from "zod";
 import {
   ApproveLinkRequest,
@@ -109,12 +112,25 @@ let t: TestApp;
 let account: TestAccount;
 const registered: RouteOptions[] = [];
 const ROUTES: ApiRoute[] = apiRoutes();
+/** Bodies the real `POST /auth/login` handler received (after sanitization and validation). */
+const loginBodies: unknown[] = [];
+
+/** Wraps the handler of the real `POST /auth/login` to record what it receives, then runs it (the M0 stub). */
+function observeLogin(route: RouteOptions): void {
+  if (route.method !== "POST" || route.url !== "/auth/login") return;
+  const original = route.handler;
+  route.handler = function (this: unknown, request: FastifyRequest, reply: FastifyReply) {
+    loginBodies.push(request.body);
+    return original.call(this as never, request, reply);
+  };
+}
 
 before(async () => {
   t = await createTestApp({
     env: { OPENAPI_DOCS_UI: "true" },
     onRoute: (route) => {
       registered.push(route);
+      observeLogin(route);
     },
   });
   account = await createAccount(t.ctx);
@@ -233,6 +249,43 @@ describe("routes of API §3", () => {
       assert.equal(response.headers["cache-control"], "no-store");
       assert.match(String(response.headers["x-request-id"]), /^[0-9a-f-]{36}$/);
     }
+  });
+
+  test("M12: Int32 on the real PUT /playback/state: 2^31−1 passes validation (501), 2^31 is 400 at queueVersion", async () => {
+    const route = ROUTES.find((item) => key(item) === "PUT /playback/state");
+    assert.ok(route);
+    const valid = VALID_BODIES["PUT /playback/state"]?.[1] as Record<string, unknown>;
+    const token = account.session.tokens.accessToken;
+    const max = await t.app.inject(request(route, { token, body: { ...valid, queueVersion: 2_147_483_647 } }));
+    assertError(max, 501, "not_implemented");
+    const over = await t.app.inject(request(route, { token, body: { ...valid, queueVersion: 2_147_483_648 } }));
+    const body = assertError(over, 400, "invalid_request");
+    assert.deepEqual(body.issues, [{ path: "queueVersion", code: "too_big" }]);
+  });
+
+  test("M12: the real POST /auth/login gets NUL removed and lone surrogates replaced before validation", async () => {
+    const route = ROUTES.find((item) => key(item) === "POST /auth/login");
+    assert.ok(route);
+    loginBodies.length = 0;
+    const raw =
+      '{"login":"ma\\u0000xim\\ud800","password":"две собаки\\u0000 и кот\\udc00",' +
+      `"device":{"hwid":"${HWID}","name":"Pix\\u0000el\\udbff","platform":"android"}}`;
+    const response = await t.app.inject({ ...request(route), payload: raw });
+    assertError(response, 501, "not_implemented");
+    assert.equal(loginBodies.length, 1);
+    const seen = loginBodies[0] as { login: string; password: string; device: { name: string; hwid: string } };
+    assert.equal(seen.login, "maxim\uFFFD");
+    assert.equal(seen.password, "две собаки и кот\uFFFD");
+    assert.equal(seen.device.name, "Pixel\uFFFD");
+    assert.equal(seen.device.hwid, HWID);
+    // NUL alone becomes an empty login, which the schema then refuses: sanitization runs first.
+    const empty = await t.app.inject({
+      ...request(route),
+      payload: JSON.stringify({ login: "\u0000", password: "x", device: DEVICE }),
+    });
+    const refused = assertError(empty, 400, "invalid_request");
+    assert.deepEqual(refused.issues, [{ path: "login", code: "too_small" }]);
+    assert.equal(loginBodies.length, 1);
   });
 
   test("DELETE has no body: a JSON (or any) Content-Type with an empty body is not a JSON error", async () => {
