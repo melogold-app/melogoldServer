@@ -24,12 +24,16 @@
 
 В разработке. Планируемый стек: Node.js 22, TypeScript, Fastify, PostgreSQL 16, описание API в OpenAPI.
 
+## Лицензия
+
+[AGPL-3.0](./LICENSE). Если вы запускаете изменённую версию сервера для других пользователей, вы обязаны опубликовать её исходный код.
+
 ## Остальные части Melogold
 
 | Платформа | Репозиторий |
 |---|---|
 | Android | [melogoldAndroid](https://github.com/melogold-app/melogoldAndroid) |
-| Сервер | melogoldServer |
-| Windows | melogoldWindows |
-| Linux | melogoldLinux |
-| iOS и macOS | melogoldiOSmacOS |
+| Сервер | [melogoldServer](https://github.com/melogold-app/melogoldServer) |
+| Windows | [melogoldWindows](https://github.com/melogold-app/melogoldWindows) |
+| Linux | [melogoldLinux](https://github.com/melogold-app/melogoldLinux) |
+| iOS и macOS | [melogoldiOSmacOS](https://github.com/melogold-app/melogoldiOSmacOS) |
