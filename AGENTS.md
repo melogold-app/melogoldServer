@@ -22,23 +22,23 @@
 
 ## Команды
 
-| Команда                                     | Что делает                                                                          |
-| ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `npm ci`                                    | установка зависимостей                                                              |
-| `npm run typecheck`                         | `tsc` без эмита                                                                     |
-| `npm run lint` / `npm run lint:fix`         | ESLint (type-checked, правила импорта и `process.env`)                              |
-| `npm run format` / `npm run format:check`   | Prettier                                                                            |
-| `npm test`                                  | все `src/**/*.test.ts` на SQLite (`TEST_DB=sqlite`)                                 |
-| `npm run db:up`, затем `npm run test:pg`    | PostgreSQL 18 (`en_US.UTF-8`, порт 55432) из `compose.dev.yml` и те же тесты на нём |
-| `npm run openapi` / `npm run openapi:check` | генерация `openapi/*` и `spec/error-codes.json` / проверка, что они закоммичены     |
-| `npm run schema:sql`                        | генерация `docs/schema.sqlite.sql` и `docs/schema.postgres.sql` из миграций         |
-| `npm run dev`                               | сервер с `--watch`, переменные из `.env` (образец — `.env.example`)                 |
-| `npm run check`                             | typecheck, lint, format:check и тесты на SQLite одной командой                      |
+| Команда                                     | Что делает                                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `npm ci`                                    | установка зависимостей                                                                       |
+| `npm run typecheck`                         | `tsc` без эмита                                                                              |
+| `npm run lint` / `npm run lint:fix`         | ESLint (type-checked, правила импорта и `process.env`)                                       |
+| `npm run format` / `npm run format:check`   | Prettier                                                                                     |
+| `npm test`                                  | все `src/**/*.test.ts` на SQLite (`TEST_DB=sqlite`)                                          |
+| `npm run db:up`, затем `npm run test:pg`    | PostgreSQL 18 (`en_US.UTF-8`, порт 55432) из `compose.dev.yml` и те же тесты на нём          |
+| `npm run openapi` / `npm run openapi:check` | генерация `openapi/*` и `spec/error-codes.json` / проверка, что они закоммичены              |
+| `npm run schema:sql`                        | генерация `docs/schema.*.sql`, `src/db/schema.snapshot.json` и `src/db/types.ts` из миграций |
+| `npm run dev`                               | сервер с `--watch`, переменные из `.env` (образец — `.env.example`)                          |
+| `npm run check`                             | typecheck, lint, format:check и тесты на SQLite одной командой                               |
 
 ## Обязательные правила
 
 - **Владение файлами.** Каждый файл принадлежит одной задаче `docs/PLAN.md`. Замороженные после M0 файлы (список в PLAN, «Общие правила», п. 2) меняет только ведущий.
-- **Генерируемые файлы** (`openapi/*`, `spec/error-codes.json`, `docs/schema.*.sql`) руками не правятся: `npm run openapi && npm run schema:sql`.
+- **Генерируемые файлы** (`openapi/*`, `spec/error-codes.json`, `docs/schema.*.sql`, `src/db/schema.snapshot.json`, `src/db/types.ts`) руками не правятся: `npm run openapi && npm run schema:sql`.
 - **`process.env`** читается только в `src/config/env.ts` (функция `parseEnv`), `src/test/test-db.ts` и `scripts/`. Остальной код получает конфигурацию через контекст.
 - **`kysely`** импортируется только в `src/db/**`, `*.repository.ts`, `src/modules/sync/**`, миграциях, тестах и `scripts/`. Репозиторий чужого модуля импортировать нельзя.
 - **Слои модуля:** `routes` — схемы и вызов сервиса; `service` — логика, `ctx.db.read/write`, `AppError` с кодом, SSE после commit; `repository` — `(q, …)` только по своим таблицам.

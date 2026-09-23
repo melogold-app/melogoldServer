@@ -26,7 +26,7 @@
     "openapi": "node scripts/gen-openapi.ts && node scripts/gen-error-codes.ts",
     "openapi:check": "npm run openapi && git diff --exit-code -- openapi spec/error-codes.json",
     "schema:sql": "node scripts/gen-schema-sql.ts",
-    "schema:sql:check": "npm run schema:sql && git diff --exit-code -- docs/schema.sqlite.sql docs/schema.postgres.sql",
+    "schema:sql:check": "npm run schema:sql && git diff --exit-code -- docs/schema.sqlite.sql docs/schema.postgres.sql src/db/schema.snapshot.json src/db/types.ts",
     "db:up": "docker compose -f compose.dev.yml up -d --wait",
     "db:down": "docker compose -f compose.dev.yml down",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
