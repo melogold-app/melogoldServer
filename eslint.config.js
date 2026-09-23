@@ -41,11 +41,14 @@ const KYSELY_MESSAGE =
 const ENV_MESSAGE =
   "process.env is read only in src/config/env.ts, src/test/test-db.ts and scripts/ (API §10, DESIGN §6.3). Pass the parsed Env instead.";
 const REPOSITORY_MESSAGE = "Do not import another module's repository; call its service instead (DESIGN §6.3).";
+const DB_KYSELY_MESSAGE =
+  "db.kysely is for tooling only (src/db/**, tests, scripts/): services and repositories use db.read/db.write/db.run and their q; a query on db.kysely inside a transaction hangs on SQLite and escapes the transaction on PostgreSQL (docs/database.md).";
 
 /**
  * Builds the restriction rules for a group of files. Flat config replaces a rule's options wholesale,
  * so every block states the complete set.
- * @param {{ kysely: boolean; env: boolean; repositories: "all" | "none" | { own: string }; migration?: boolean }} allow
+ * @param {{ kysely: boolean; env: boolean; repositories: "all" | "none" | { own: string }; migration?: boolean; dbKysely?: boolean }} allow
+ *   `dbKysely`: the file may read `db.kysely` (the raw Kysely instance below the transaction runner).
  */
 function restrictions(allow) {
   const paths = [];
@@ -96,11 +99,13 @@ function restrictions(allow) {
     );
   }
 
+  const properties = [];
+  if (!allow.env) properties.push({ object: "process", property: "env", message: ENV_MESSAGE });
+  if (!allow.dbKysely) properties.push({ property: "kysely", message: DB_KYSELY_MESSAGE });
+
   return {
     "no-restricted-imports": paths.length + patterns.length > 0 ? ["error", { paths, patterns }] : "off",
-    "no-restricted-properties": allow.env
-      ? "off"
-      : ["error", { object: "process", property: "env", message: ENV_MESSAGE }],
+    "no-restricted-properties": properties.length > 0 ? ["error", ...properties] : "off",
     "no-restricted-syntax": syntax.length > 0 ? ["error", ...syntax] : "off",
   };
 }
@@ -196,19 +201,25 @@ export default defineConfig(
       rules: restrictions({ kysely: true, env: false, repositories: { own: name } }),
     },
   ]),
-  { files: ["src/db/**/*.ts"], rules: restrictions({ kysely: true, env: false, repositories: "none" }) },
+  {
+    files: ["src/db/**/*.ts"],
+    rules: restrictions({ kysely: true, env: false, repositories: "none", dbKysely: true }),
+  },
   {
     files: ["src/db/migrations/**/*.ts"],
-    rules: restrictions({ kysely: true, env: false, repositories: "none", migration: true }),
+    rules: restrictions({ kysely: true, env: false, repositories: "none", migration: true, dbKysely: true }),
   },
   { files: ["src/config/env.ts"], rules: restrictions({ kysely: false, env: true, repositories: "none" }) },
   {
     files: ["src/test/**/*.ts", "src/**/*.test.ts"],
     rules: {
-      ...restrictions({ kysely: true, env: false, repositories: "all" }),
+      ...restrictions({ kysely: true, env: false, repositories: "all", dbKysely: true }),
       "@typescript-eslint/no-non-null-assertion": "off",
     },
   },
-  { files: ["src/test/test-db.ts"], rules: restrictions({ kysely: true, env: true, repositories: "all" }) },
-  { files: ["scripts/**/*.ts"], rules: restrictions({ kysely: true, env: true, repositories: "all" }) },
+  {
+    files: ["src/test/test-db.ts"],
+    rules: restrictions({ kysely: true, env: true, repositories: "all", dbKysely: true }),
+  },
+  { files: ["scripts/**/*.ts"], rules: restrictions({ kysely: true, env: true, repositories: "all", dbKysely: true }) },
 );

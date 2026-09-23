@@ -11,7 +11,7 @@ import { createPostgresDialect, createPostgresPool } from "./dialect-postgres.ts
 import { createSqliteDialect, openSqlite } from "./dialect-sqlite.ts";
 import { ensureHead } from "./heads.ts";
 import { StatementCounterPlugin, StripRowLocksPlugin } from "./plugins.ts";
-import { createTxRunner } from "./tx.ts";
+import { assertOutsideTx, createTxRunner } from "./tx.ts";
 import type { TxRunner } from "./tx.ts";
 import type { Database } from "./types.ts";
 
@@ -99,9 +99,12 @@ export type Db = TxRunner<Database> &
     dialect: SqlDialect;
     /**
      * The Kysely instance below the transaction runner, for tooling only (migrations, the schema check, tests).
-     * Services and repositories always go through `read`/`write`/`run`.
+     * Services and repositories always go through `read`/`write`/`run`: ESLint forbids `.kysely` outside
+     * `src/db/**`, tests and `scripts/`, and reading it inside `db.read`/`db.write`/`db.run` throws
+     * `NestedDbAccessError` (on SQLite a query through it would wait forever for the only connection; on
+     * PostgreSQL it would run outside the transaction).
      */
-    kysely: Kysely<Database>;
+    readonly kysely: Kysely<Database>;
     /** Closes the pool or the SQLite file. */
     destroy(): Promise<void>;
   }>;
@@ -125,7 +128,10 @@ export function dbFromKysely(opened: OpenedKysely<Database>, options: DbOptions 
   return Object.freeze({
     ...runner,
     dialect: opened.dialect,
-    kysely: opened.kysely,
+    get kysely() {
+      assertOutsideTx("kysely");
+      return opened.kysely;
+    },
     destroy: () => opened.kysely.destroy(),
   });
 }

@@ -11,6 +11,7 @@ import type { Db } from "./index.ts";
 import { MIGRATION_TABLE, MigrationError, migrateToLatest, prepareDatabase, readMigrationState } from "./migrate.ts";
 import { MIGRATIONS } from "./migrations/index.ts";
 import type { MelogoldMigration } from "./migrations/index.ts";
+import { NestedDbAccessError } from "./tx.ts";
 import {
   SchemaMismatchError,
   checkSchema,
@@ -161,6 +162,24 @@ describe(`migrations (${TEST_DIALECT})`, () => {
         db.write(() => migrateToLatest(db, { log: recordingLog().log })),
         /db\.migrate called inside db\.write/,
       );
+    });
+  });
+
+  test("db.kysely (tooling only) throws inside db.read/db.write/db.run instead of escaping the transaction", async () => {
+    await withEmptyDb(async (db) => {
+      assert.equal(typeof db.kysely.selectFrom, "function", "outside a call it is available");
+      const inside: [string, () => Promise<unknown>][] = [
+        ["write", () => db.write(() => Promise.resolve(db.kysely))],
+        ["read", () => db.read(() => Promise.resolve(db.kysely))],
+        ["run", () => db.run(() => Promise.resolve(db.kysely))],
+      ];
+      for (const [kind, call] of inside) {
+        await assert.rejects(call(), (error) => {
+          assert.ok(error instanceof NestedDbAccessError, kind);
+          assert.match(error.message, new RegExp(`^db\\.kysely called inside db\\.${kind}:`));
+          return true;
+        });
+      }
     });
   });
 });

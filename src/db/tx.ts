@@ -46,7 +46,7 @@ export function currentTxScope(): TxScope | undefined {
 }
 
 export class NestedDbAccessError extends Error {
-  constructor(inner: TxKind | "migrate", outer: TxKind) {
+  constructor(inner: TxKind | "migrate" | "kysely", outer: TxKind) {
     super(
       `db.${inner} called inside db.${outer}: database calls must not nest ` +
         "(SQLite would wait forever for its only connection); finish the outer call first",
@@ -75,7 +75,7 @@ export class TxRuleError extends Error {
 }
 
 /** Throws when called inside `db.read`/`db.write`/`db.run` (used by the migration runner and similar tools). */
-export function assertOutsideTx(what: TxKind | "migrate"): void {
+export function assertOutsideTx(what: TxKind | "migrate" | "kysely"): void {
   const outer = currentTxScope();
   if (outer) throw new NestedDbAccessError(what, outer.kind);
 }
