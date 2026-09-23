@@ -20,7 +20,6 @@ export type ErrorDetailValues = {
   minProtocol: number;
   maxProtocol: number;
   floorCursor: string;
-  minDeviceAgeDays: number;
 };
 
 export type ErrorDetailKey = keyof ErrorDetailValues;
@@ -35,7 +34,6 @@ export const ERROR_DETAIL_KEYS: readonly ErrorDetailKey[] = Object.freeze([
   "minProtocol",
   "maxProtocol",
   "floorCursor",
-  "minDeviceAgeDays",
 ]);
 
 export type ErrorCodeSpec = Readonly<{

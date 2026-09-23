@@ -3064,10 +3064,6 @@ components:
         floorCursor:
           type: string
           description: Opaque cursor (API §1.6).
-        minDeviceAgeDays:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
       required:
         - statusCode
         - error

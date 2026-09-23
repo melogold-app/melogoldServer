@@ -327,7 +327,6 @@ export const ErrorResponse = z
     minProtocol: IntOut.optional(),
     maxProtocol: IntOut.optional(),
     floorCursor: CursorOut.optional(),
-    minDeviceAgeDays: IntOut.optional(),
   })
   .meta({
     id: "ErrorResponse",

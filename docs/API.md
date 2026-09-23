@@ -223,7 +223,7 @@ type ErrorResponse = {
   // детали — только у своих кодов:
   retryAfterSeconds?: number; issues?: ValidationIssue[]; minLength?: number; maxLength?: number;
   deviceLimit?: number; deviceCount?: number; minProtocol?: number; maxProtocol?: number;
-  floorCursor?: string; minDeviceAgeDays?: number;
+  floorCursor?: string;
 };
 type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код zod */ };
 ```
