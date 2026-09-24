@@ -2,8 +2,9 @@
  * Routes of the `linking` module (API §4.6, T1.4): the new device's side (`/auth/link/*`, public or poll secret) and
  * the signed-in device's side (`/auth/me/links*`, Bearer).
  *
- * M0: development stubs with their complete schemas (PLAN step 0.8); every handler answers `501 not_implemented`.
- * T1.4 declares `deviceLinking` in `ctx.features` (`deviceLinkingFeature(ctx.env.LINK_TTL_SECONDS)`).
+ * Routes only validate and call `linking.service.ts`; the client network for the network hint and the per-IP limit is
+ * `clientNet(request.ip)` (IPv4 whole, IPv6 /56, `TRUST_PROXY`-aware). The module declares `deviceLinking` in
+ * `ctx.features` and wakes every waiting poll when the server closes (`preClose`, DESIGN §4.10.6).
  */
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -24,12 +25,22 @@ import {
   PollLinkRequest,
   ResolveLinkRequest,
 } from "../../contract/linking.ts";
-import { notImplemented, operation } from "../../http/operation.ts";
+import { requireAuth } from "../../http/auth-guard.ts";
+import { clientNet } from "../../http/client-ip.ts";
+import { operation } from "../../http/operation.ts";
+import { deviceLinkingFeature } from "../server/features.ts";
+import { createLinkingService } from "./linking.service.ts";
 
 const RESOLVE_CODES = ["link_not_found", "link_already_claimed", "link_wrong_mode", "link_expired"] as const;
 
-export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): void {
+export function registerLinkingRoutes(app: FastifyInstance, ctx: AppContext): void {
   const routes = app.withTypeProvider<ZodTypeProvider>();
+  const service = createLinkingService(ctx);
+  ctx.features.declare("deviceLinking", deviceLinkingFeature(ctx.env.LINK_TTL_SECONDS));
+  app.addHook("preClose", (done) => {
+    service.close();
+    done();
+  });
 
   routes.post(
     "/auth/link/requests",
@@ -44,7 +55,10 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         response: LinkCreated,
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      const created = await service.createRequest(request.body.device, clientNet(request.ip));
+      return reply.code(201).send(created);
+    },
   );
 
   routes.post(
@@ -61,7 +75,7 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: RESOLVE_CODES,
       }),
     },
-    notImplemented,
+    (request) => service.claim(request.body, request.body.device, clientNet(request.ip)),
   );
 
   routes.post(
@@ -80,7 +94,15 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["link_denied", "link_not_found", "device_limit_reached", "link_expired", "link_cancelled"],
       }),
     },
-    notImplemented,
+    (request, reply) => {
+      // The wait ends early when the client goes away.
+      const abort = new AbortController();
+      reply.raw.once("close", () => {
+        abort.abort();
+      });
+      const { pollSecret, waitSeconds, knownStatus } = request.body;
+      return service.poll({ pollSecret, waitSeconds, knownStatus, signal: abort.signal });
+    },
   );
 
   routes.post(
@@ -95,7 +117,10 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["link_not_found"],
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      await service.cancelByPollSecret(request.body.pollSecret);
+      return reply.code(204).send();
+    },
   );
 
   routes.post(
@@ -111,7 +136,10 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         response: LinkCreated,
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      const created = await service.createInvite(requireAuth(request), clientNet(request.ip));
+      return reply.code(201).send(created);
+    },
   );
 
   routes.post(
@@ -128,7 +156,7 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: RESOLVE_CODES,
       }),
     },
-    notImplemented,
+    (request) => service.resolve(requireAuth(request), request.body, clientNet(request.ip)),
   );
 
   routes.get(
@@ -144,7 +172,7 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["link_not_found"],
       }),
     },
-    notImplemented,
+    (request) => service.get(requireAuth(request), request.params.linkId),
   );
 
   routes.post(
@@ -171,7 +199,7 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         ],
       }),
     },
-    notImplemented,
+    (request) => service.approve(requireAuth(request), request.params.linkId, request.body.verifyCode),
   );
 
   routes.post(
@@ -188,7 +216,7 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["link_not_found", "link_expired"],
       }),
     },
-    notImplemented,
+    (request) => service.deny(requireAuth(request), request.params.linkId),
   );
 
   routes.post(
@@ -204,6 +232,9 @@ export function registerLinkingRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["link_not_found"],
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      await service.cancel(requireAuth(request), request.params.linkId);
+      return reply.code(204).send();
+    },
   );
 }
