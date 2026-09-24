@@ -41,7 +41,7 @@ import {
 } from "../../contract/index.ts";
 import { bearer, createAccount } from "../factories.ts";
 import type { TestAccount } from "../factories.ts";
-import { assertError, createTestApp } from "../test-app.ts";
+import { assertError, createTestApp, json } from "../test-app.ts";
 import type { TestApp } from "../test-app.ts";
 import { apiRoutes } from "./api-table.ts";
 import type { ApiRoute } from "./api-table.ts";
@@ -98,7 +98,7 @@ const VALID_BODIES: Readonly<Record<string, readonly [z.ZodType, unknown]>> = {
   ],
 };
 
-/** Routes implemented in M0 (the server module); every other route is a stub. */
+/** Routes implemented in M0 (the server module) or by a finished M1 task; every other route is a stub. */
 const IMPLEMENTED = new Set([
   "GET /",
   "GET /health",
@@ -106,6 +106,13 @@ const IMPLEMENTED = new Set([
   "GET /openapi.json",
   "GET /server/info",
   "GET /docs",
+  // PLAN T1.3 (account): password, recovery code, recover, deletion, export.
+  "POST /auth/recover",
+  "POST /auth/me/password",
+  "POST /auth/me/recovery-code",
+  "POST /auth/me/recovery-code/confirm",
+  "POST /auth/me/delete",
+  "GET /auth/me/export",
 ]);
 
 let t: TestApp;
@@ -195,13 +202,17 @@ describe("routes of API §3", () => {
   test("public routes never ask for a token", async () => {
     for (const route of ROUTES.filter((item) => item.auth !== "bearer")) {
       const response = await t.app.inject(request(route));
-      assert.notEqual(response.statusCode, 401, `${key(route)}: ${response.body}`);
+      // A public, now-implemented route may still answer its own business 401 (e.g. POST /auth/recover with an
+      // unknown login → 401 invalid_recovery_code, DESIGN §4.9 enumeration protection): only the guard's own
+      // "unauthorized" for a missing/invalid token would mean the route is not actually public.
+      const code = response.statusCode === 401 ? json(response).code : null;
+      assert.notEqual(code, "unauthorized", `${key(route)}: ${response.body}`);
     }
   });
 
   test("every stub answers 501 not_implemented to a valid, authenticated request", async () => {
     const stubs = ROUTES.filter((route) => !IMPLEMENTED.has(key(route)));
-    assert.equal(stubs.length, 33);
+    assert.equal(stubs.length, 27);
     for (const route of stubs) {
       const token = route.auth === "bearer" ? account.session.tokens.accessToken : undefined;
       const response = await t.app.inject(request(route, token === undefined ? {} : { token }));

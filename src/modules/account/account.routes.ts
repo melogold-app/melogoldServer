@@ -1,10 +1,12 @@
 /**
- * Routes of the `account` module (API §4.5, T1.3): password change, recovery code rotation and confirmation, account
- * deletion, recovery by code, export.
+ * Routes of the `account` module (API §4.5, PLAN T1.3): password change, recovery code rotation and confirmation,
+ * account deletion, recovery by code, export. Schemas and the service call only; the HTTP policy of every route
+ * (auth, body limit, rate limits: `me/password`, `me/recovery-code`, `me/delete` 5/h per user, export 3/h per user,
+ * recover 20/h per IP) comes from `src/http/route-policy.ts`.
  *
- * M0: development stubs with their complete schemas (PLAN step 0.8); every handler answers `501 not_implemented`.
- * T1.3 declares `recoveryCode`, `export` and `accountDeletion` in `ctx.features`.
+ * The module declares `recoveryCode`, `export` and `accountDeletion` in `/server/info.features` (API §4.2).
  */
+import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { AppContext } from "../../context.ts";
@@ -19,7 +21,12 @@ import {
   RotateRecoveryCodeRequest,
 } from "../../contract/account.ts";
 import { AuthSession } from "../../contract/common.ts";
-import { notImplemented, operation } from "../../http/operation.ts";
+import { requireAuth } from "../../http/auth-guard.ts";
+import { operation } from "../../http/operation.ts";
+import { FEATURE_V1 } from "../server/features.ts";
+import { createAccountService } from "./account.service.ts";
+import { createPasswordHasher } from "./credentials.ts";
+import { contentDisposition, prepareExport } from "./export.ts";
 
 const PASSWORD_POLICY_CODES = [
   "password_too_short",
@@ -28,8 +35,13 @@ const PASSWORD_POLICY_CODES = [
   "password_contains_login",
 ] as const;
 
-export function registerAccountRoutes(app: FastifyInstance, _ctx: AppContext): void {
+export function registerAccountRoutes(app: FastifyInstance, ctx: AppContext): void {
   const routes = app.withTypeProvider<ZodTypeProvider>();
+  const service = createAccountService({ ctx, passwords: createPasswordHasher(ctx.env) });
+
+  ctx.features.declare("recoveryCode", FEATURE_V1);
+  ctx.features.declare("export", FEATURE_V1);
+  ctx.features.declare("accountDeletion", FEATURE_V1);
 
   routes.post(
     "/auth/recover",
@@ -48,7 +60,7 @@ export function registerAccountRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: [...PASSWORD_POLICY_CODES, "invalid_recovery_code"],
       }),
     },
-    notImplemented,
+    (request) => service.recover(request.body),
   );
 
   routes.post(
@@ -67,7 +79,7 @@ export function registerAccountRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: [...PASSWORD_POLICY_CODES, "invalid_password", "reauth_throttled"],
       }),
     },
-    notImplemented,
+    (request) => service.changePassword(requireAuth(request), request.body),
   );
 
   routes.post(
@@ -83,7 +95,7 @@ export function registerAccountRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["invalid_password", "reauth_throttled"],
       }),
     },
-    notImplemented,
+    (request) => service.rotateRecoveryCode(requireAuth(request), request.body),
   );
 
   routes.post(
@@ -98,7 +110,10 @@ export function registerAccountRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["recovery_code_outdated"],
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      await service.confirmRecoveryCode(requireAuth(request), request.body);
+      return reply.code(204).send();
+    },
   );
 
   routes.post(
@@ -116,10 +131,14 @@ export function registerAccountRoutes(app: FastifyInstance, _ctx: AppContext): v
         errors: ["invalid_password", "reauth_throttled"],
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      await service.deleteAccount(requireAuth(request), request.body);
+      return reply.code(204).send();
+    },
   );
 
-  routes.get(
+  // Registered without the zod type provider: the answer is a stream, which Fastify sends as is (no serializer).
+  app.get(
     "/auth/me/export",
     {
       schema: operation("GET", "/auth/me/export", {
@@ -133,6 +152,21 @@ export function registerAccountRoutes(app: FastifyInstance, _ctx: AppContext): v
         response: ExportDocument,
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      const prepared = await prepareExport(ctx, requireAuth(request));
+      const log = request.log;
+      async function* guarded(): AsyncGenerator<string> {
+        try {
+          yield* prepared.chunks;
+        } catch (error) {
+          log.error({ err: error }, "export failed after the response started; the download is cut");
+          throw error;
+        }
+      }
+      return reply
+        .header("content-disposition", contentDisposition(prepared.filename))
+        .type("application/json; charset=utf-8")
+        .send(Readable.from(guarded(), { objectMode: false }));
+    },
   );
 }
