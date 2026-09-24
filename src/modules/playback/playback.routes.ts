@@ -1,17 +1,21 @@
 /**
  * Routes of the `playback` module (API §4.9, T2.4): "continue on another device". All three require
- * `X-Sync-Protocol`.
+ * `X-Sync-Protocol`. Declares `ctx.features.declare("playback", FEATURE_V1)` (API §4.2).
  *
- * M0: development stubs with their complete schemas (PLAN step 0.8); every handler answers `501 not_implemented`.
- * T2.4 declares `ctx.features.declare("playback", FEATURE_V1)`.
+ * The rule engine is `playback.rules.ts` (pure) and `playback.service.ts` (I/O, CAS, SSE); routes only wire the
+ * request to the service and pick the HTTP status.
  */
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { AppContext } from "../../context.ts";
 import { PlaybackPut, PlaybackPutResult, PlaybackStateResponse } from "../../contract/playback.ts";
-import { notImplemented, operation } from "../../http/operation.ts";
+import { requireAuth } from "../../http/auth-guard.ts";
+import { operation } from "../../http/operation.ts";
+import { FEATURE_V1 } from "../server/features.ts";
+import { clearPlaybackState, getPlaybackState, putPlaybackState } from "./playback.service.ts";
 
-export function registerPlaybackRoutes(app: FastifyInstance, _ctx: AppContext): void {
+export function registerPlaybackRoutes(app: FastifyInstance, ctx: AppContext): void {
+  ctx.features.declare("playback", FEATURE_V1);
   const routes = app.withTypeProvider<ZodTypeProvider>();
 
   routes.get(
@@ -26,7 +30,7 @@ export function registerPlaybackRoutes(app: FastifyInstance, _ctx: AppContext): 
         response: PlaybackStateResponse,
       }),
     },
-    notImplemented,
+    (request) => getPlaybackState(ctx, requireAuth(request).userId),
   );
 
   routes.put(
@@ -45,7 +49,7 @@ export function registerPlaybackRoutes(app: FastifyInstance, _ctx: AppContext): 
         errors: ["playback_queue_required"],
       }),
     },
-    notImplemented,
+    (request) => putPlaybackState(ctx, requireAuth(request), request.body),
   );
 
   routes.delete(
@@ -59,6 +63,9 @@ export function registerPlaybackRoutes(app: FastifyInstance, _ctx: AppContext): 
         status: 204,
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      await clearPlaybackState(ctx, requireAuth(request));
+      return reply.code(204).send();
+    },
   );
 }
