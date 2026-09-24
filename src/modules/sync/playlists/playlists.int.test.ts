@@ -209,6 +209,33 @@ describe("playlist handlers: behaviour the scenario format does not cover", () =
     assert.equal(row.name, "Once", "the second create must not overwrite the header");
   });
 
+  test("playlist.delete carries pre_image = {name, videoIds} for the journal", async () => {
+    const playlistId = crypto.randomUUID();
+    await apply(deviceA.id, 1000, "playlist.create", {
+      playlistId,
+      name: "Farewell",
+      videoIds: ["ffffffffff1", "ffffffffff2"],
+    });
+    const outcome = await apply(deviceA.id, 2000, "playlist.delete", { playlistId });
+    assert.equal(outcome.status, "applied");
+    assert.deepEqual(outcome.preImage, { name: "Farewell", videoIds: ["ffffffffff1", "ffffffffff2"] });
+  });
+
+  test("playlist.items.replace carries pre_image = the present list before the op", async () => {
+    const playlistId = crypto.randomUUID();
+    await apply(deviceA.id, 1000, "playlist.create", {
+      playlistId,
+      name: "Mirror",
+      videoIds: ["gggggggggg1", "gggggggggg2"],
+    });
+    const outcome = await apply(deviceA.id, 2000, "playlist.items.replace", {
+      playlistId,
+      videoIds: ["gggggggggg2", "gggggggggg3"],
+    });
+    assert.equal(outcome.status, "applied");
+    assert.deepEqual(outcome.preImage, { videoIds: ["gggggggggg1", "gggggggggg2"] });
+  });
+
   test("the recovery chain follows uuidv5 links: a deleted recovery playlist hands off to the next one", async () => {
     const playlistId = crypto.randomUUID();
     await apply(deviceA.id, 1000, "playlist.create", { playlistId, name: "Chain", videoIds: [] });
