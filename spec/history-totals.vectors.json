@@ -1,0 +1,206 @@
+{
+  "$comment": "Melogold history op pure functions (DESIGN §3.7, §3.11.3, §3.11.5; API §4.8): the rules that decide history membership and totals, shared between server tests and any client that wants to mirror them. Each group's cases are applied to the function of that name in src/modules/sync/ops/{play-add,play-baseline,history-clear,history-forget}.ts, positionally in the order of the function's parameters (an object parameter stays an object). `MAX_SAFE_INTEGER` is API §1.4's 2^53 − 1 ceiling on totals.",
+  "license": "CC0-1.0",
+  "format": 1,
+  "planPlayAdd": {
+    "$comment": "planPlayAdd(input) -> {inHistory, countsTotal}; retentionDays=400 in every case unless noted",
+    "cases": [
+      {
+        "name": "plain play, no prior forgets, within retention",
+        "input": { "eff": 1000, "now": 1000, "history": true, "playtime": true, "eventsBefore": null, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": true, "countsTotal": true }
+      },
+      {
+        "name": "history:false still counts the total",
+        "input": { "eff": 1000, "now": 1000, "history": false, "playtime": true, "eventsBefore": null, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": false, "countsTotal": true }
+      },
+      {
+        "name": "playtime:false never counts the total even with no prior forget",
+        "input": { "eff": 1000, "now": 1000, "history": true, "playtime": false, "eventsBefore": null, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": true, "countsTotal": false }
+      },
+      {
+        "name": "eff at the events_before mark (inclusive boundary) is forgotten",
+        "input": { "eff": 5000, "now": 5000, "history": true, "playtime": true, "eventsBefore": 5000, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": false, "countsTotal": true }
+      },
+      {
+        "name": "eff one ms after the events_before mark clears it",
+        "input": { "eff": 5001, "now": 5001, "history": true, "playtime": true, "eventsBefore": 5000, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": true, "countsTotal": true }
+      },
+      {
+        "name": "eff at total_before (inclusive boundary) never counts again",
+        "input": { "eff": 5000, "now": 5000, "history": true, "playtime": true, "eventsBefore": null, "totalBefore": 5000, "retentionDays": 400 },
+        "expected": { "inHistory": true, "countsTotal": false }
+      },
+      {
+        "name": "eff exactly at the retention cutoff is excluded (exclusive boundary)",
+        "input": { "eff": 0, "now": 34560000000, "history": true, "playtime": true, "eventsBefore": null, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": false, "countsTotal": true }
+      },
+      {
+        "name": "eff one ms inside the retention window is kept",
+        "input": { "eff": 1, "now": 34560000000, "history": true, "playtime": true, "eventsBefore": null, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": true, "countsTotal": true }
+      },
+      {
+        "name": "both flags false never happens on the wire (rejected at parse), but the function still answers pointwise",
+        "input": { "eff": 1000, "now": 1000, "history": false, "playtime": false, "eventsBefore": null, "totalBefore": null, "retentionDays": 400 },
+        "expected": { "inHistory": false, "countsTotal": false }
+      }
+    ]
+  },
+  "nextPlayStat": {
+    "$comment": "nextPlayStat(current, addMs, playedAt) -> {totalMs, lastPlayedAt}",
+    "cases": [
+      {
+        "name": "no prior row",
+        "current": null,
+        "addMs": 1000,
+        "playedAt": 500,
+        "expected": { "totalMs": 1000, "lastPlayedAt": 500 }
+      },
+      {
+        "name": "adds to an existing row and raises last_played_at",
+        "current": { "totalMs": 500, "lastPlayedAt": 200 },
+        "addMs": 100,
+        "playedAt": 300,
+        "expected": { "totalMs": 600, "lastPlayedAt": 300 }
+      },
+      {
+        "name": "a play earlier than last_played_at still adds to the total but does not move the mark back",
+        "current": { "totalMs": 500, "lastPlayedAt": 400 },
+        "addMs": 50,
+        "playedAt": 300,
+        "expected": { "totalMs": 550, "lastPlayedAt": 400 }
+      },
+      {
+        "name": "playedAt null (not in history) leaves last_played_at untouched",
+        "current": { "totalMs": 0, "lastPlayedAt": 999 },
+        "addMs": 5,
+        "playedAt": null,
+        "expected": { "totalMs": 5, "lastPlayedAt": 999 }
+      },
+      {
+        "name": "first row with playedAt null",
+        "current": null,
+        "addMs": 0,
+        "playedAt": null,
+        "expected": { "totalMs": 0, "lastPlayedAt": null }
+      },
+      {
+        "name": "the total clamps at 2^53 - 1",
+        "current": { "totalMs": 9007199254740990, "lastPlayedAt": null },
+        "addMs": 100,
+        "playedAt": null,
+        "expected": { "totalMs": 9007199254740991, "lastPlayedAt": null }
+      }
+    ]
+  },
+  "laterMark": {
+    "$comment": "laterMark(a, b) -> the larger of two optional marks",
+    "cases": [
+      { "name": "a null", "a": null, "b": 5, "expected": 5 },
+      { "name": "b null", "a": 5, "b": null, "expected": 5 },
+      { "name": "a undefined", "a": null, "b": 7, "expected": 7, "aUndefined": true },
+      { "name": "both null", "a": null, "b": null, "expected": null },
+      { "name": "a smaller", "a": 3, "b": 7, "expected": 7 },
+      { "name": "b smaller", "a": 7, "b": 3, "expected": 7 },
+      { "name": "equal", "a": 4, "b": 4, "expected": 4 }
+    ]
+  },
+  "baselineSkips": {
+    "$comment": "baselineSkips(totalBefore, effAt) -> totalBefore !== null && totalBefore >= effAt",
+    "cases": [
+      { "name": "no forget", "totalBefore": null, "effAt": 100, "expected": false },
+      { "name": "mark equal to effAt (inclusive)", "totalBefore": 100, "effAt": 100, "expected": true },
+      { "name": "mark before effAt", "totalBefore": 99, "effAt": 100, "expected": false },
+      { "name": "mark after effAt", "totalBefore": 101, "effAt": 100, "expected": true }
+    ]
+  },
+  "baselineTotal": {
+    "$comment": "baselineTotal(mode, currentMs, totalMs)",
+    "cases": [
+      { "name": "add sums", "mode": "add", "currentMs": 100, "totalMs": 50, "expected": 150 },
+      { "name": "atLeast raises", "mode": "atLeast", "currentMs": 40, "totalMs": 50, "expected": 50 },
+      { "name": "atLeast keeps the larger current value", "mode": "atLeast", "currentMs": 100, "totalMs": 50, "expected": 100 },
+      { "name": "add clamps at 2^53 - 1", "mode": "add", "currentMs": 9007199254740990, "totalMs": 10, "expected": 9007199254740991 }
+    ]
+  },
+  "raiseClearMark": {
+    "$comment": "raiseClearMark(current, mark) -> the new '*' events_before, or null when it does not grow",
+    "cases": [
+      { "name": "first clear", "current": null, "mark": 100, "expected": 100 },
+      { "name": "mark grows", "current": 50, "mark": 100, "expected": 100 },
+      { "name": "mark equal (no growth, inclusive)", "current": 100, "mark": 100, "expected": null },
+      { "name": "mark smaller (no growth)", "current": 150, "mark": 100, "expected": null }
+    ]
+  },
+  "raiseForget": {
+    "$comment": "raiseForget(current, mark, resetTotal) -> {forget: {eventsBefore, totalBefore}, eventsRaised, totalRaised}",
+    "cases": [
+      {
+        "name": "first forget without reset",
+        "current": null,
+        "mark": 100,
+        "resetTotal": false,
+        "expected": { "forget": { "eventsBefore": 100, "totalBefore": null }, "eventsRaised": true, "totalRaised": false }
+      },
+      {
+        "name": "first forget with reset raises both marks to the same value",
+        "current": null,
+        "mark": 100,
+        "resetTotal": true,
+        "expected": { "forget": { "eventsBefore": 100, "totalBefore": 100 }, "eventsRaised": true, "totalRaised": true }
+      },
+      {
+        "name": "a smaller mark without reset changes nothing",
+        "current": { "eventsBefore": 100, "totalBefore": null },
+        "mark": 50,
+        "resetTotal": false,
+        "expected": { "forget": { "eventsBefore": 100, "totalBefore": null }, "eventsRaised": false, "totalRaised": false }
+      },
+      {
+        "name": "a larger mark with reset raises both marks",
+        "current": { "eventsBefore": 100, "totalBefore": null },
+        "mark": 150,
+        "resetTotal": true,
+        "expected": { "forget": { "eventsBefore": 150, "totalBefore": 150 }, "eventsRaised": true, "totalRaised": true }
+      },
+      {
+        "name": "total_before can grow on its own without raising events_before",
+        "current": { "eventsBefore": 200, "totalBefore": 150 },
+        "mark": 180,
+        "resetTotal": true,
+        "expected": { "forget": { "eventsBefore": 200, "totalBefore": 180 }, "eventsRaised": false, "totalRaised": true }
+      },
+      {
+        "name": "a reset at or before total_before changes nothing",
+        "current": { "eventsBefore": 200, "totalBefore": 150 },
+        "mark": 140,
+        "resetTotal": true,
+        "expected": { "forget": { "eventsBefore": 200, "totalBefore": 150 }, "eventsRaised": false, "totalRaised": false }
+      },
+      {
+        "name": "resetTotal false never raises total_before even when the mark is larger",
+        "current": { "eventsBefore": 100, "totalBefore": 50 },
+        "mark": 200,
+        "resetTotal": false,
+        "expected": { "forget": { "eventsBefore": 200, "totalBefore": 50 }, "eventsRaised": true, "totalRaised": false }
+      }
+    ]
+  },
+  "evictionBatch": {
+    "$comment": "evictionBatch(cap) -> min(maxOpsPerRequest=500, floor(cap/100))",
+    "cases": [
+      { "name": "the 60000 play_events cap", "cap": 60000, "expected": 500 },
+      { "name": "the 50000 in-history default cap", "cap": 50000, "expected": 500 },
+      { "name": "a small cap rounds down", "cap": 250, "expected": 2 },
+      { "name": "a cap under 100 evicts nothing extra", "cap": 99, "expected": 0 },
+      { "name": "cap of 1", "cap": 1, "expected": 0 },
+      { "name": "a cap whose 1% exceeds maxOpsPerRequest is clamped", "cap": 100000, "expected": 500 }
+    ]
+  }
+}
