@@ -1,9 +1,10 @@
 /**
  * Routes of the `auth` module (API §4.3, T1.1): registration challenge, register, login, refresh, logout, `GET /auth/me`.
+ * Routes only validate and call the services (`auth.service.ts`, `refresh.service.ts`).
  *
- * M0: development stubs with their complete schemas (PLAN step 0.8): a request passes the guard, the limits and
- * validation, then answers `501 not_implemented`. T1.1 replaces the handlers and declares
- * `ctx.features.declare("registrationPow", …)`.
+ * - `POST /auth/register` checks the registration mode and the proof of work in a route `preValidation` hook, i.e.
+ *   before its schema (DESIGN §4.2: mode → PoW → schema → …); instance hooks (sanitization) run before it.
+ * - `features.registrationPow` of `/server/info` is present while proof of work is required (API §4.2).
  */
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -18,10 +19,17 @@ import {
   RegisterRequest,
 } from "../../contract/auth.ts";
 import { AuthSession } from "../../contract/common.ts";
-import { notImplemented, operation } from "../../http/operation.ts";
+import { requireAuth } from "../../http/auth-guard.ts";
+import { operation } from "../../http/operation.ts";
+import { FEATURE_V1 } from "../server/features.ts";
+import { createAuthService } from "./auth.service.ts";
+import { createRefreshService } from "./refresh.service.ts";
 
-export function registerAuthRoutes(app: FastifyInstance, _ctx: AppContext): void {
+export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext): void {
   const routes = app.withTypeProvider<ZodTypeProvider>();
+  const auth = createAuthService(ctx);
+  const sessions = createRefreshService(ctx);
+  ctx.features.declare("registrationPow", () => (auth.pow.requiredBits(ctx.clock.now()) > 0 ? FEATURE_V1 : null));
 
   routes.get(
     "/auth/register/challenge",
@@ -37,7 +45,7 @@ export function registerAuthRoutes(app: FastifyInstance, _ctx: AppContext): void
         response: RegisterChallenge,
       }),
     },
-    notImplemented,
+    () => Promise.resolve(auth.challenge()),
   );
 
   routes.post(
@@ -65,8 +73,12 @@ export function registerAuthRoutes(app: FastifyInstance, _ctx: AppContext): void
           "login_taken",
         ],
       }),
+      preValidation: (request) => auth.registrationGate(request.body),
     },
-    notImplemented,
+    async (request, reply) => {
+      const session = await auth.register(request.body);
+      return reply.code(201).send(session);
+    },
   );
 
   routes.post(
@@ -85,7 +97,7 @@ export function registerAuthRoutes(app: FastifyInstance, _ctx: AppContext): void
         errors: ["invalid_credentials", "device_limit_reached", "login_throttled"],
       }),
     },
-    notImplemented,
+    (request) => auth.login(request.body),
   );
 
   routes.post(
@@ -104,7 +116,7 @@ export function registerAuthRoutes(app: FastifyInstance, _ctx: AppContext): void
         errors: ["session_revoked", "invalid_refresh_token", "refresh_token_reused", "device_mismatch"],
       }),
     },
-    notImplemented,
+    (request) => sessions.refresh(request.body),
   );
 
   routes.post(
@@ -121,7 +133,10 @@ export function registerAuthRoutes(app: FastifyInstance, _ctx: AppContext): void
         status: 204,
       }),
     },
-    notImplemented,
+    async (request, reply) => {
+      await sessions.logout(request.body);
+      return reply.code(204).send();
+    },
   );
 
   routes.get(
@@ -135,6 +150,6 @@ export function registerAuthRoutes(app: FastifyInstance, _ctx: AppContext): void
         response: MeResponse,
       }),
     },
-    notImplemented,
+    (request) => auth.me(requireAuth(request)),
   );
 }
