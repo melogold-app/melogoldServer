@@ -10,10 +10,15 @@
  * - {@link LiveHub.publishCoalesced} throttles an event type per user (API §6 `sync.changed`: 2 s): the first event
  *   of a quiet period goes out at once, later ones inside the window merge into one trailing event with the latest
  *   payload. The trailing event skips the author only when every merged event had the same author.
- * - {@link LiveHub.closeDevice}, {@link LiveHub.closeUser} and {@link LiveHub.closeAll} (shutdown) close streams.
+ * - {@link LiveHub.closeDevice}, {@link LiveHub.closeUser}, {@link LiveHub.closeStream} and {@link LiveHub.closeAll}
+ *   (shutdown, `preClose` in `app.ts`) close streams.
+ * - {@link LiveHub.heartbeat} writes a heartbeat to every stream and closes the ones whose token expired; the heartbeat
+ *   loop of `revalidate.ts` calls it every `SSE_HEARTBEAT_SECONDS` and then rechecks the devices in the database.
  *
- * The hub knows nothing about HTTP: a stream is a `send`/`close` pair supplied by the route (T1.5), which writes the
- * frames of `live.events.ts`. Owned by T1.5 after M0 (PLAN).
+ * The hub knows nothing about HTTP: a stream is a `send`/`ping`/`close` triple supplied by the route
+ * (`live.routes.ts`), which writes the frames of `live.events.ts`. The route and the heartbeat loop take their timers
+ * from {@link LiveHub.timers}, so a test that injects `liveTimers` into the context drives every timer of the live
+ * module. Owned by T1.5 after M0 (PLAN).
  */
 import type { Clock } from "../../lib/clock.ts";
 import type { LiveTarget, RemovalLive } from "../../lib/device-removal.ts";
@@ -23,8 +28,17 @@ import type { LiveEvent, LiveEventType, LivePayload } from "./live.events.ts";
 
 export type { LiveTarget };
 
-/** Why the hub closed a stream (the route may log it; clients only see the connection end). */
-export type LiveCloseReason = "evicted" | "device_closed" | "user_closed" | "shutdown";
+/**
+ * Why a stream was closed (the route logs it; clients only see the connection end):
+ * - `evicted`: over the per-device or per-user limit (API §6 "Лимиты");
+ * - `device_closed`, `user_closed`: {@link LiveHub.closeDevice}, {@link LiveHub.closeUser};
+ * - `expired`: the access token of the stream reached `exp` (DESIGN §4.7);
+ * - `outdated`: `users.auth_version` is no longer the `av` of the stream's token (DESIGN §4.7);
+ * - `broken`: writing to the connection failed;
+ * - `shutdown`: {@link LiveHub.closeAll}.
+ */
+export type LiveCloseReason =
+  "evicted" | "device_closed" | "user_closed" | "expired" | "outdated" | "broken" | "shutdown";
 
 /** A stream as the route registers it. */
 export type LiveStreamHandle = Readonly<{
@@ -36,6 +50,11 @@ export type LiveStreamHandle = Readonly<{
   expiresAt: number;
   /** Writes one event frame; may throw when the connection is gone (the hub then drops the stream). */
   send(event: LiveEvent): void;
+  /**
+   * Writes a heartbeat comment (`: heartbeat <now>`); may throw like `send`. Optional: a stream without it (tests)
+   * is only checked for expiry by {@link LiveHub.heartbeat}.
+   */
+  ping?(now: number): void;
   /** Ends the connection. Called once, after the hub forgot the stream. */
   close(reason: LiveCloseReason): void;
 }>;
@@ -144,7 +163,12 @@ export class LiveHub implements RemovalLive {
     });
   }
 
-  /** Every stream open now (for the heartbeat revalidation of T1.5). */
+  /** The timers of the live module: coalescing here, token expiry and the heartbeat in the route. */
+  get timers(): LiveTimers {
+    return this.#timers;
+  }
+
+  /** Every stream open now, oldest first per user (for the heartbeat revalidation, `revalidate.ts`). */
   streams(): readonly LiveStream[] {
     return [...this.#byUser.values()].flat();
   }
@@ -176,7 +200,7 @@ export class LiveHub implements RemovalLive {
         stream.send(event);
       } catch (error) {
         this.#log.warn({ err: error, type }, "live stream failed to send; closing it");
-        this.#close(stream, "device_closed");
+        this.#close(stream, "broken");
       }
     }
   }
@@ -219,6 +243,33 @@ export class LiveHub implements RemovalLive {
   /** Closes every stream of the user (account deleted, `auth_version` changed). */
   closeUser(userId: string): void {
     for (const stream of [...(this.#byUser.get(userId) ?? [])]) this.#close(stream, "user_closed");
+  }
+
+  /** Closes one stream (token expiry, outdated `auth_version`). A stream already closed or forgotten is ignored. */
+  closeStream(stream: LiveStream, reason: LiveCloseReason): void {
+    this.#close(stream, reason);
+  }
+
+  /**
+   * One heartbeat (API §6: a comment every `SSE_HEARTBEAT_SECONDS`): a stream whose token expired is closed (a safety
+   * net for the route's expiry timer, e.g. after the wall clock jumped), every other stream gets `ping(now)`; a
+   * stream whose `ping` throws is closed. Never throws.
+   */
+  heartbeat(): void {
+    const now = this.#clock.now();
+    for (const stream of this.streams()) {
+      if (stream.expiresAt <= now) {
+        this.#close(stream, "expired");
+        continue;
+      }
+      if (stream.ping === undefined) continue;
+      try {
+        stream.ping(now);
+      } catch (error) {
+        this.#log.warn({ err: error }, "live stream failed to send a heartbeat; closing it");
+        this.#close(stream, "broken");
+      }
+    }
   }
 
   /** Closes every stream and drops pending coalesced events (server shutdown, `preClose`). */
