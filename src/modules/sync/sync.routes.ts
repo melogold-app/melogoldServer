@@ -3,10 +3,10 @@
  * `X-Sync-Protocol` (checked before validation, `src/http/sync-protocol.ts`).
  *
  * `POST /sync` validates `SyncRequestEnvelope` (only `opId`/`kind`/`at`/`base` of each op, DESIGN §3.9); OpenAPI shows
- * `SyncRequest` with the flat `SyncOp`.
+ * `SyncRequest` with the flat `SyncOp`. `POST /sync/merge-plan` calls T2.2's `planMerge` and stays a development stub
+ * (`501 not_implemented`) until that task is merged.
  *
- * M0: development stubs with their complete schemas (PLAN step 0.8); every handler answers `501 not_implemented`.
- * T2.1 declares `ctx.features.declare("sync", () => syncFeature(implementedOpKinds(handlers)))`.
+ * `features.sync` (API §4.2) lists the op kinds with a real handler.
  */
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -19,10 +19,17 @@ import {
   SyncResponse,
   SyncSummary,
 } from "../../contract/sync.ts";
-import { notImplemented, operation } from "../../http/operation.ts";
+import { requireAuth } from "../../http/auth-guard.ts";
+import { operation } from "../../http/operation.ts";
+import { syncFeature } from "../server/features.ts";
+import { implementedOpKinds } from "./ops/index.ts";
+import { localeFromAcceptLanguage } from "./ops/types.ts";
+import { createSyncService } from "./sync.service.ts";
 
-export function registerSyncRoutes(app: FastifyInstance, _ctx: AppContext): void {
+export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void {
   const routes = app.withTypeProvider<ZodTypeProvider>();
+  const service = createSyncService(ctx);
+  ctx.features.declare("sync", () => syncFeature(implementedOpKinds(service.handlers)));
 
   routes.get(
     "/sync/summary",
@@ -35,7 +42,7 @@ export function registerSyncRoutes(app: FastifyInstance, _ctx: AppContext): void
         response: SyncSummary,
       }),
     },
-    notImplemented,
+    (request) => service.summary(requireAuth(request)),
   );
 
   routes.post(
@@ -51,7 +58,7 @@ export function registerSyncRoutes(app: FastifyInstance, _ctx: AppContext): void
         response: MergePlanResponse,
       }),
     },
-    notImplemented,
+    (request) => service.mergePlan(requireAuth(request), request.body),
   );
 
   routes.post(
@@ -72,6 +79,7 @@ export function registerSyncRoutes(app: FastifyInstance, _ctx: AppContext): void
         errors: ["cursor_invalid", "cursor_expired"],
       }),
     },
-    notImplemented,
+    (request) =>
+      service.sync(requireAuth(request), request.body, localeFromAcceptLanguage(request.headers["accept-language"])),
   );
 }
