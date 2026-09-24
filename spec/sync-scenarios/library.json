@@ -1,0 +1,266 @@
+{
+  "license": "CC0-1.0",
+  "description": "Scenarios for like.set and bookmark.set (DESIGN §3.4 conflict rule, §3.7 register semantics; PLAN T2.1 Приёмка \"library.json: все сценарии лайков и закладок\"). Format: see src/modules/sync/library-scenarios.int.test.ts, which runs this file against the real op handlers through a synthetic OpCtx (M0's TxRule, no HTTP). Each scenario runs its steps in order against fresh, scenario-local videoId/browseId keys; devices 0/1/2 are fixed test devices whose ids compare ordinally as \"00000000-...\" < \"11111111-...\" < \"22222222-...\". A step's `base` is either omitted (no causal information), \"\" (the client had seen nothing), or the label of an earlier step's `capture` (that step's resulting cursor).",
+  "scenarios": [
+    {
+      "name": "like.set: лайк с нуля",
+      "steps": [
+        {
+          "device": 0,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa1", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa1", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" } }
+    },
+    {
+      "name": "like.set: снятие лайка обнуляет likedAt",
+      "steps": [
+        {
+          "device": 0,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa2", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 0,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:05:00.000Z", "videoId": "aaaaaaaaaa2", "liked": false },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa2", "liked": false, "likedAt": null } }
+    },
+    {
+      "name": "like.set: холостая операция (значение уже такое) не двигает likedAt",
+      "steps": [
+        {
+          "device": 0,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa3", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 1,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:30:00.000Z", "videoId": "aaaaaaaaaa3", "liked": true, "likedAt": "2026-09-23T09:30:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa3", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" } }
+    },
+    {
+      "name": "like.set: одновременные правки — побеждает более позднее effAt",
+      "steps": [
+        {
+          "device": 0,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa4", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 1,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:30:00.000Z", "videoId": "aaaaaaaaaa4", "liked": false },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa4", "liked": false, "likedAt": null } }
+    },
+    {
+      "name": "like.set: без base — более раннее effAt проигрывает (superseded)",
+      "steps": [
+        {
+          "device": 0,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:30:00.000Z", "videoId": "aaaaaaaaaa5", "liked": true, "likedAt": "2026-09-23T09:30:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 1,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa5", "liked": false },
+          "expect": { "status": "superseded", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa5", "liked": true, "likedAt": "2026-09-23T09:30:00.000Z" } }
+    },
+    {
+      "name": "like.set: base переопределяет более раннее effAt (автор видел текущее значение)",
+      "steps": [
+        {
+          "device": 0,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa6", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" },
+          "capture": "afterLike6",
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 1,
+          "op": { "kind": "like.set", "at": "2026-09-23T08:00:00.000Z", "videoId": "aaaaaaaaaa6", "liked": false, "base": "afterLike6" },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa6", "liked": false, "likedAt": null } }
+    },
+    {
+      "name": "like.set: ничья по effAt — больший id устройства побеждает",
+      "steps": [
+        {
+          "device": 1,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa7", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 2,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa7", "liked": false },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa7", "liked": false, "likedAt": null } }
+    },
+    {
+      "name": "like.set: ничья по effAt — меньший id устройства проигрывает",
+      "steps": [
+        {
+          "device": 2,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa8", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 1,
+          "op": { "kind": "like.set", "at": "2026-09-23T09:00:00.000Z", "videoId": "aaaaaaaaaa8", "liked": false },
+          "expect": { "status": "superseded", "code": null }
+        }
+      ],
+      "expectFinal": { "like": { "videoId": "aaaaaaaaaa8", "liked": true, "likedAt": "2026-09-23T09:00:00.000Z" } }
+    },
+    {
+      "name": "bookmark.set: закладка с нуля сохраняет метаданные",
+      "steps": [
+        {
+          "device": 0,
+          "op": {
+            "kind": "bookmark.set",
+            "at": "2026-09-23T09:00:00.000Z",
+            "type": "album",
+            "browseId": "MPRElibscn01",
+            "bookmarked": true,
+            "bookmarkedAt": "2026-09-23T09:00:00.000Z",
+            "title": "Later",
+            "subtitle": "Best of",
+            "thumbnailUrl": "https://img.example/scn01.jpg",
+            "year": "2020"
+          },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": {
+        "bookmark": {
+          "type": "album",
+          "browseId": "MPRElibscn01",
+          "bookmarked": true,
+          "bookmarkedAt": "2026-09-23T09:00:00.000Z",
+          "title": "Later",
+          "subtitle": "Best of",
+          "thumbnailUrl": "https://img.example/scn01.jpg",
+          "year": "2020"
+        }
+      }
+    },
+    {
+      "name": "bookmark.set: снятие закладки обнуляет bookmarkedAt, но сохраняет метаданные",
+      "steps": [
+        {
+          "device": 0,
+          "op": {
+            "kind": "bookmark.set",
+            "at": "2026-09-23T09:00:00.000Z",
+            "type": "album",
+            "browseId": "MPRElibscn02",
+            "bookmarked": true,
+            "bookmarkedAt": "2026-09-23T09:00:00.000Z",
+            "title": "Rock"
+          },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 0,
+          "op": {
+            "kind": "bookmark.set",
+            "at": "2026-09-23T09:30:00.000Z",
+            "type": "album",
+            "browseId": "MPRElibscn02",
+            "bookmarked": false
+          },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": {
+        "bookmark": {
+          "type": "album",
+          "browseId": "MPRElibscn02",
+          "bookmarked": false,
+          "bookmarkedAt": null,
+          "title": "Rock",
+          "subtitle": null,
+          "thumbnailUrl": null,
+          "year": null
+        }
+      }
+    },
+    {
+      "name": "bookmark.set: метаданные обновляются только при победе регистра",
+      "steps": [
+        {
+          "device": 0,
+          "op": {
+            "kind": "bookmark.set",
+            "at": "2026-09-23T09:30:00.000Z",
+            "type": "album",
+            "browseId": "MPRElibscn03",
+            "bookmarked": true,
+            "title": "Original"
+          },
+          "expect": { "status": "applied", "code": null }
+        },
+        {
+          "device": 1,
+          "op": {
+            "kind": "bookmark.set",
+            "at": "2026-09-23T09:00:00.000Z",
+            "type": "album",
+            "browseId": "MPRElibscn03",
+            "bookmarked": true,
+            "title": "Stale"
+          },
+          "expect": { "status": "superseded", "code": null }
+        }
+      ],
+      "expectFinal": {
+        "bookmark": {
+          "type": "album",
+          "browseId": "MPRElibscn03",
+          "bookmarked": true,
+          "title": "Original"
+        }
+      }
+    },
+    {
+      "name": "bookmark.set: album и artist с одним browseId — разные регистры",
+      "steps": [
+        {
+          "device": 0,
+          "op": {
+            "kind": "bookmark.set",
+            "at": "2026-09-23T09:00:00.000Z",
+            "type": "artist",
+            "browseId": "MPRElibscn03",
+            "bookmarked": true,
+            "title": "ArtistName"
+          },
+          "expect": { "status": "applied", "code": null }
+        }
+      ],
+      "expectFinal": {
+        "bookmark": {
+          "type": "artist",
+          "browseId": "MPRElibscn03",
+          "bookmarked": true,
+          "title": "ArtistName"
+        }
+      }
+    }
+  ]
+}
