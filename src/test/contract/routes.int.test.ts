@@ -98,7 +98,7 @@ const VALID_BODIES: Readonly<Record<string, readonly [z.ZodType, unknown]>> = {
   ],
 };
 
-/** Routes implemented in M0 (the server module); every other route is a stub. */
+/** Routes implemented so far (M0: the server module; T1.5: SSE); every other route is a stub. */
 const IMPLEMENTED = new Set([
   "GET /",
   "GET /health",
@@ -106,6 +106,7 @@ const IMPLEMENTED = new Set([
   "GET /openapi.json",
   "GET /server/info",
   "GET /docs",
+  "GET /auth/me/events",
 ]);
 
 let t: TestApp;
@@ -201,7 +202,7 @@ describe("routes of API §3", () => {
 
   test("every stub answers 501 not_implemented to a valid, authenticated request", async () => {
     const stubs = ROUTES.filter((route) => !IMPLEMENTED.has(key(route)));
-    assert.equal(stubs.length, 33);
+    assert.equal(stubs.length, 32);
     for (const route of stubs) {
       const token = route.auth === "bearer" ? account.session.tokens.accessToken : undefined;
       const response = await t.app.inject(request(route, token === undefined ? {} : { token }));
