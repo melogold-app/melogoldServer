@@ -3,8 +3,7 @@
  * `X-Sync-Protocol` (checked before validation, `src/http/sync-protocol.ts`).
  *
  * `POST /sync` validates `SyncRequestEnvelope` (only `opId`/`kind`/`at`/`base` of each op, DESIGN §3.9); OpenAPI shows
- * `SyncRequest` with the flat `SyncOp`. `POST /sync/merge-plan` calls T2.2's `planMerge` and stays a development stub
- * (`501 not_implemented`) until that task is merged.
+ * `SyncRequest` with the flat `SyncOp`. `POST /sync/merge-plan` calls T2.2's `planMerge`.
  *
  * `features.sync` (API §4.2) lists the op kinds with a real handler.
  */

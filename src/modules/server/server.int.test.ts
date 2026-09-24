@@ -9,13 +9,14 @@ import { gunzipSync } from "node:zlib";
 import { after, before, describe, test } from "node:test";
 import { generateOpenapi } from "../../../scripts/gen-openapi.ts";
 import { ServerInfo } from "../../contract/server.ts";
+import { SYNC_OP_KINDS } from "../../contract/sync.ts";
 import { API_MD } from "../../test/contract/api-table.ts";
 import { createUser } from "../../test/factories.ts";
 import { assertError, createTestApp, json, TEST_T0 } from "../../test/test-app.ts";
 import type { TestApp } from "../../test/test-app.ts";
 import { DAY_MS } from "../../lib/clock.ts";
 import { formatIso } from "../../lib/time.ts";
-import { FEATURE_V1 } from "./features.ts";
+import { deviceLinkingFeature, FEATURE_V1, syncFeature } from "./features.ts";
 import { readMeta, upsertMeta } from "./server.repository.ts";
 import { applyPendingRestore, checkReadiness, initServerIdentity } from "./server.service.ts";
 
@@ -103,6 +104,16 @@ describe("GET /health and /health/live (API §4.2)", () => {
   });
 });
 
+/** `features` of `/server/info` with every module registered (M1–M2) and the default env. */
+const ALL_FEATURES = {
+  sync: syncFeature(SYNC_OP_KINDS),
+  playback: FEATURE_V1,
+  deviceLinking: deviceLinkingFeature(300),
+  recoveryCode: FEATURE_V1,
+  export: FEATURE_V1,
+  accountDeletion: FEATURE_V1,
+};
+
 describe("GET /server/info (API §4.2)", () => {
   test("every field of API §4.2, limits from env, public cache, CORS *", async () => {
     const response = await t.app.inject({ method: "GET", url: "/server/info", headers: { origin: "https://x.test" } });
@@ -122,13 +133,7 @@ describe("GET /server/info (API §4.2)", () => {
     assert.equal(body.publicUrl, null);
     assert.equal(body.secureTransport, false);
     assert.equal(body.serverTime, formatIso(t.clock.now()));
-    assert.deepEqual(
-      body.features,
-      // PLAN T1.3 (account) declares these three unconditionally when its routes register; every other module is
-      // still an M0 stub and declares nothing.
-      { recoveryCode: { version: 1 }, export: { version: 1 }, accountDeletion: { version: 1 } },
-      "only the finished account module (T1.3) declares features so far",
-    );
+    assert.deepEqual(body.features, ALL_FEATURES, "every module declares its features; PoW is off by default");
     assert.deepEqual(body.limits, example.limits, "default env gives the limits of the example");
     assert.deepEqual(body.links, {
       source: "https://github.com/melogold-app/melogoldServer/tree/3f9c2ab1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8",
@@ -154,9 +159,6 @@ describe("the application around the server module", () => {
         PUBLIC_URL: "https://music.example.com",
         MAX_DEVICES_PER_USER: "0",
       },
-      configure: ({ ctx }) => {
-        ctx.features.declare("playback", FEATURE_V1);
-      },
     });
     try {
       const response = await other.app.inject({
@@ -165,14 +167,8 @@ describe("the application around the server module", () => {
         headers: { "x-forwarded-proto": "https" },
       });
       const body = json(response);
-      // `configure` adds "playback" on top of what the real, already-implemented modules declare on their own
-      // (PLAN T1.3's account module: recoveryCode, export, accountDeletion).
-      assert.deepEqual(body.features, {
-        playback: { version: 1 },
-        recoveryCode: { version: 1 },
-        export: { version: 1 },
-        accountDeletion: { version: 1 },
-      });
+      // What the real modules declare on their own
+      assert.deepEqual(body.features, ALL_FEATURES);
       assert.equal(body.secureTransport, true);
       assert.equal(body.registration, "closed");
       assert.equal(body.publicUrl, "https://music.example.com");

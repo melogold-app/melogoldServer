@@ -191,14 +191,24 @@ describe("идемпотентность: replayed", () => {
     assert.equal(secondResult.seq, firstResult?.seq);
   });
 
-  test("play.add (idempotent by play_events, not sync_ops) is a stub in M0/T2.1: unknown_kind, never a crash", async () => {
-    // T2.3 has not merged play.add yet; the runner still finds no crash on a kind it does not implement.
-    const op = { opId: newId(), kind: "play.add", at: new Date(t.clock.now()).toISOString(), videoId: vid(3) };
-    const body = json(await postSync(account.session.tokens.accessToken, { cursor: "", ops: [op] }));
-    const result = (body.results as Record<string, unknown>[])[0];
-    assert.equal(result?.status, "deferred");
-    assert.equal(result.code, "unknown_kind");
-    assert.equal(result.seq, null);
+  test("play.add (idempotent by play_events, not sync_ops) goes through /sync: applied, then replayed", async () => {
+    const now = new Date(t.clock.now()).toISOString();
+    const op = {
+      opId: newId(),
+      kind: "play.add",
+      at: now,
+      videoId: vid(3),
+      playedAt: now,
+      playTimeMs: 180_000,
+      history: true,
+      playtime: true,
+    };
+    const token = account.session.tokens.accessToken;
+    const first = (json(await postSync(token, { cursor: "", ops: [op] })).results as Record<string, unknown>[])[0];
+    assert.equal(first?.status, "applied");
+    const again = (json(await postSync(token, { cursor: "", ops: [op] })).results as Record<string, unknown>[])[0];
+    assert.equal(again?.status, "applied");
+    assert.equal(again.replayed, true);
   });
 });
 

@@ -53,6 +53,7 @@ import { likeSetHandler } from "./ops/like-set.ts";
 import { bookmarkKey, createRequestCounters, deferred, newTouchedKeys, toOpResult } from "./ops/types.ts";
 import type { OpCtx, OpEnv, OpHandler, OpOutcome, ParsedOp, ServerLocale, TouchedKeys, WireOp } from "./ops/types.ts";
 import { emptyArrays, newResponseRows, readForcedRows, readPage, readSatellites, responseArrays } from "./page.ts";
+import { planMerge } from "./playlists/merge-plan.ts";
 import { readSummary } from "./summary.ts";
 import { upsertTracks } from "./tracks.ts";
 import { effectiveAt } from "./wins.ts";
@@ -323,13 +324,14 @@ export type MergePlanner = (
   request: MergePlanRequest,
 ) => Promise<MergePlanResponse>;
 
-/** Until T2.2's `planMerge` is merged the route stays a development stub (PLAN T2.1): `501 not_implemented`. */
-export const planMergeStub: MergePlanner = () => Promise.reject(new AppError("not_implemented"));
+/** T2.2's `planMerge` over the user's playlists, in a read transaction: nothing is written (API §4.7). */
+export const playlistMergePlanner: MergePlanner = (ctx, auth, request) =>
+  ctx.db.read((q) => planMerge(q, auth.userId, request));
 
 export type SyncServiceOptions = Readonly<{
   /** Default: {@link syncOpHandlers}. */
   handlers?: OpHandlers;
-  /** Default: {@link planMergeStub}. */
+  /** Default: {@link playlistMergePlanner}. */
   planMerge?: MergePlanner;
 }>;
 
@@ -342,7 +344,7 @@ export type SyncService = Readonly<{
 
 export function createSyncService(ctx: AppContext, options: SyncServiceOptions = {}): SyncService {
   const handlers = options.handlers ?? syncOpHandlers();
-  const planMerge = options.planMerge ?? planMergeStub;
+  const mergePlanner = options.planMerge ?? playlistMergePlanner;
 
   async function sync(auth: RequestAuth, request: SyncRequestEnvelope, locale: ServerLocale): Promise<SyncResponse> {
     const ops = request.ops ?? [];
@@ -397,6 +399,6 @@ export function createSyncService(ctx: AppContext, options: SyncServiceOptions =
     handlers,
     sync,
     summary: (auth: RequestAuth) => ctx.db.read((q) => readSummary(q, auth.userId, ctx.clock.now())),
-    mergePlan: (auth: RequestAuth, request: MergePlanRequest) => planMerge(ctx, auth, request),
+    mergePlan: (auth: RequestAuth, request: MergePlanRequest) => mergePlanner(ctx, auth, request),
   });
 }

@@ -2,8 +2,9 @@
  * The routes of the application against API §3 (DESIGN §10 contract tests, PLAN M0 acceptance), on both dialects:
  * - every route of API §3 exists (38 and `/docs` when enabled), and no other;
  * - closed by default: every Bearer route answers `401 unauthorized` without a token, public routes never do;
- * - every M0 stub answers `501 not_implemented` after authentication and validation (a valid request), and `400` for
- *   an invalid body, which proves validation runs first;
+ * - no route is a development stub any more (PLAN MVP checklist): no route module calls `notImplemented`;
+ * - an invalid body is `400` and a wrong `Content-Type` `415` on every route with a body: validation runs before the
+ *   handler;
  * - every error is the 4-key envelope with a registered code; an unknown route is `404 not_found`; so is a path
  *   Fastify rejects before routing;
  * - M12 on the real contract routes: Int32 overflow of `PUT /playback/state`, sanitization of `POST /auth/login`;
@@ -11,6 +12,7 @@
  * - every observed error status is documented for its operation (except 501, which is never documented).
  */
 import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
 import { after, before, describe, test } from "node:test";
 import type { FastifyReply, FastifyRequest, InjectOptions, RouteOptions } from "fastify";
 import type { z } from "zod";
@@ -98,25 +100,6 @@ const VALID_BODIES: Readonly<Record<string, readonly [z.ZodType, unknown]>> = {
   ],
 };
 
-/** Routes implemented in M0 (the server module) or by a finished M1–M2 task; every other route is a stub. */
-const IMPLEMENTED = new Set([
-  "GET /",
-  "GET /health",
-  "GET /health/live",
-  "GET /openapi.json",
-  "GET /server/info",
-  "GET /docs",
-  // PLAN T1.3 (account): password, recovery code, recover, deletion, export.
-  "POST /auth/recover",
-  "POST /auth/me/password",
-  "POST /auth/me/recovery-code",
-  "POST /auth/me/recovery-code/confirm",
-  "POST /auth/me/delete",
-  "GET /auth/me/export",
-  // PLAN T1.5: SSE.
-  "GET /auth/me/events",
-]);
-
 let t: TestApp;
 let account: TestAccount;
 const registered: RouteOptions[] = [];
@@ -124,7 +107,7 @@ const ROUTES: ApiRoute[] = apiRoutes();
 /** Bodies the real `POST /auth/login` handler received (after sanitization and validation). */
 const loginBodies: unknown[] = [];
 
-/** Wraps the handler of the real `POST /auth/login` to record what it receives, then runs it (the M0 stub). */
+/** Wraps the handler of the real `POST /auth/login` to record what it receives, then runs it. */
 function observeLogin(route: RouteOptions): void {
   if (route.method !== "POST" || route.url !== "/auth/login") return;
   const original = route.handler;
@@ -136,7 +119,8 @@ function observeLogin(route: RouteOptions): void {
 
 before(async () => {
   t = await createTestApp({
-    env: { OPENAPI_DOCS_UI: "true" },
+    // Open registration: POST /auth/register refuses a closed server before it looks at the body
+    env: { OPENAPI_DOCS_UI: "true", REGISTRATION: "open" },
     onRoute: (route) => {
       registered.push(route);
       observeLogin(route);
@@ -212,17 +196,17 @@ describe("routes of API §3", () => {
     }
   });
 
-  test("every stub answers 501 not_implemented to a valid, authenticated request", async () => {
-    const stubs = ROUTES.filter((route) => !IMPLEMENTED.has(key(route)));
-    assert.equal(stubs.length, 26);
-    for (const route of stubs) {
-      const token = route.auth === "bearer" ? account.session.tokens.accessToken : undefined;
-      const response = await t.app.inject(request(route, token === undefined ? {} : { token }));
-      assertError(response, 501, "not_implemented");
+  test("no route is a development stub: no route module calls notImplemented", async () => {
+    const modules = new URL("../../modules/", import.meta.url);
+    const files = (await readdir(modules, { recursive: true })).filter((name) => name.endsWith(".routes.ts"));
+    assert.ok(files.length >= 8, files.join(", "));
+    for (const file of files) {
+      const source = await readFile(new URL(file, modules), "utf8");
+      assert.ok(!/\bnotImplemented\b/.test(source), `${file} still has a stub`);
     }
   });
 
-  test("validation runs before the stub: an invalid body is 400 invalid_request, a wrong type 415", async () => {
+  test("validation runs before the handler: an invalid body is 400 invalid_request, a wrong type 415", async () => {
     for (const route of ROUTES.filter((item) => VALID_BODIES[key(item)] !== undefined)) {
       const token = route.auth === "bearer" ? account.session.tokens.accessToken : undefined;
       const invalid = await t.app.inject(request(route, { ...(token === undefined ? {} : { token }), body: [] }));
@@ -264,13 +248,14 @@ describe("routes of API §3", () => {
     }
   });
 
-  test("M12: Int32 on the real PUT /playback/state: 2^31−1 passes validation (501), 2^31 is 400 at queueVersion", async () => {
+  test("M12: Int32 on the real PUT /playback/state: 2^31−1 passes validation, 2^31 is 400 at queueVersion", async () => {
     const route = ROUTES.find((item) => key(item) === "PUT /playback/state");
     assert.ok(route);
     const valid = VALID_BODIES["PUT /playback/state"]?.[1] as Record<string, unknown>;
     const token = account.session.tokens.accessToken;
     const max = await t.app.inject(request(route, { token, body: { ...valid, queueVersion: 2_147_483_647 } }));
-    assertError(max, 501, "not_implemented");
+    // Past validation: the handler wants a queue for a new session
+    assertError(max, 409, "playback_queue_required");
     const over = await t.app.inject(request(route, { token, body: { ...valid, queueVersion: 2_147_483_648 } }));
     const body = assertError(over, 400, "invalid_request");
     assert.deepEqual(body.issues, [{ path: "queueVersion", code: "too_big" }]);
@@ -284,7 +269,8 @@ describe("routes of API §3", () => {
       '{"login":"ma\\u0000xim\\ud800","password":"две собаки\\u0000 и кот\\udc00",' +
       `"device":{"hwid":"${HWID}","name":"Pix\\u0000el\\udbff","platform":"android"}}`;
     const response = await t.app.inject({ ...request(route), payload: raw });
-    assertError(response, 501, "not_implemented");
+    // Past validation: the handler knows no such login
+    assertError(response, 401, "invalid_credentials");
     assert.equal(loginBodies.length, 1);
     const seen = loginBodies[0] as { login: string; password: string; device: { name: string; hwid: string } };
     assert.equal(seen.login, "maxim\uFFFD");
@@ -311,7 +297,7 @@ describe("routes of API §3", () => {
     ];
     for (const variant of variants) {
       const response = await t.app.inject({ method: "DELETE", url: "/playback/state", ...variant });
-      assertError(response, 501, "not_implemented");
+      assert.equal(response.statusCode, 204, response.body);
     }
   });
 

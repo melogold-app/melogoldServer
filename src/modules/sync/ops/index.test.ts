@@ -26,14 +26,22 @@ function wire(kind: string, fields: Record<string, unknown> = {}): WireOp {
   return SyncOpEnvelope.parse({ opId: OP_ID, kind, at: "2026-09-23T10:00:00.000Z", ...fields });
 }
 
-describe("op registry (M0 stubs)", () => {
-  test("one handler per kind of API §4.8, all stubs answering deferred unknown_kind", async () => {
+describe("op registry", () => {
+  test("one real handler per kind of API §4.8 (T2.1 library, T2.2 playlists, T2.3 history)", () => {
     assert.deepEqual(Object.keys(OP_HANDLERS), [...SYNC_OP_KINDS]);
     for (const kind of SYNC_OP_KINDS) {
       const handler = OP_HANDLERS[kind];
       assert.equal(handler.kind, kind);
+      assert.equal(handler.implemented, true, kind);
+      assert.equal(handler.journaled, SYNC_OP_KIND_SPECS[kind].journaled, kind);
+    }
+    assert.deepEqual(implementedOpKinds(), [...SYNC_OP_KINDS]);
+  });
+
+  test("a stub answers deferred unknown_kind at parse and apply, and touches nothing", async () => {
+    for (const kind of SYNC_OP_KINDS) {
+      const handler = stubOpHandler(kind);
       assert.equal(handler.implemented, false);
-      assert.equal(handler.journaled, SYNC_OP_KIND_SPECS[kind].journaled);
       assert.deepEqual(handler.parse(wire(kind)), {
         ok: false,
         outcome: { status: "deferred", code: "unknown_kind" },
@@ -49,7 +57,6 @@ describe("op registry (M0 stubs)", () => {
         [0, 0, 0, 0, 0, 0],
       );
     }
-    assert.deepEqual(implementedOpKinds(), []);
   });
 
   test("unknown kinds have no handler (prototype keys included)", () => {

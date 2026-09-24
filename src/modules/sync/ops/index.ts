@@ -1,13 +1,26 @@
 /**
  * The registry of op handlers (`handlers[raw.kind]` of DESIGN §3.8), one per kind of API §4.8.
  *
- * In M0 every kind is a **stub** that answers `deferred unknown_kind`: the op is kept by the client and retried when
- * the server version changes (API §2.3), exactly like a kind this server does not know. A task that implements a
- * kind (T2.1 `like.set`/`bookmark.set`, T2.2 `playlist.*`, T2.3 `play.*`/`history.*`) replaces its stub here with the
- * handler of its file (one line, through the lead: PLAN, general rules item 1).
+ * A kind without a handler would be a **stub** answering `deferred unknown_kind`: the op is kept by the client and
+ * retried when the server version changes (API §2.3), exactly like a kind this server does not know. Since M2 every
+ * kind has its handler (T2.1 `like.set`/`bookmark.set`, T2.2 `playlist.*`, T2.3 `play.*`/`history.*`).
  */
 import { SYNC_OP_KIND_SPECS, SYNC_OP_KINDS } from "../../../contract/sync.ts";
 import type { SyncOpKind } from "../../../contract/sync.ts";
+import { bookmarkSetHandler } from "./bookmark-set.ts";
+import { historyClearHandler } from "./history-clear.ts";
+import { historyForgetHandler } from "./history-forget.ts";
+import { likeSetHandler } from "./like-set.ts";
+import { playAddHandler } from "./play-add.ts";
+import { playBaselineHandler } from "./play-baseline.ts";
+import { playlistCreate } from "./playlist-create.ts";
+import { playlistDelete } from "./playlist-delete.ts";
+import { playlistImport } from "./playlist-import.ts";
+import { playlistItemMove } from "./playlist-item-move.ts";
+import { playlistItemRemove } from "./playlist-item-remove.ts";
+import { playlistItemsAdd } from "./playlist-items-add.ts";
+import { playlistItemsReplace } from "./playlist-items-replace.ts";
+import { playlistUpdate } from "./playlist-update.ts";
 import { deferred, notParsed } from "./types.ts";
 import type { OpHandler } from "./types.ts";
 
@@ -38,8 +51,23 @@ export function buildOpHandlers(implemented: Readonly<Partial<Record<SyncOpKind,
   return Object.freeze(Object.fromEntries(entries) as Record<SyncOpKind, OpHandler>);
 }
 
-/** The handlers of this server (M0: all stubs). */
-export const OP_HANDLERS: OpHandlers = buildOpHandlers({});
+/** The handlers of this server: every kind of API §4.8 (T2.1 library, T2.2 playlists, T2.3 history). */
+export const OP_HANDLERS: OpHandlers = buildOpHandlers({
+  "like.set": likeSetHandler,
+  "bookmark.set": bookmarkSetHandler,
+  "playlist.create": playlistCreate,
+  "playlist.update": playlistUpdate,
+  "playlist.delete": playlistDelete,
+  "playlist.items.add": playlistItemsAdd,
+  "playlist.item.remove": playlistItemRemove,
+  "playlist.item.move": playlistItemMove,
+  "playlist.items.replace": playlistItemsReplace,
+  "playlist.import": playlistImport,
+  "play.add": playAddHandler,
+  "play.baseline": playBaselineHandler,
+  "history.clear": historyClearHandler,
+  "history.forget": historyForgetHandler,
+});
 
 /** The handler of a raw `kind`, or `null` for a kind this server does not know (→ `deferred unknown_kind`). */
 export function opHandlerFor(handlers: OpHandlers, kind: string): OpHandler | null {
