@@ -122,7 +122,13 @@ describe("GET /server/info (API §4.2)", () => {
     assert.equal(body.publicUrl, null);
     assert.equal(body.secureTransport, false);
     assert.equal(body.serverTime, formatIso(t.clock.now()));
-    assert.deepEqual(body.features, {}, "M0: no module declares a feature");
+    assert.deepEqual(
+      body.features,
+      // PLAN T1.3 (account) declares these three unconditionally when its routes register; every other module is
+      // still an M0 stub and declares nothing.
+      { recoveryCode: { version: 1 }, export: { version: 1 }, accountDeletion: { version: 1 } },
+      "only the finished account module (T1.3) declares features so far",
+    );
     assert.deepEqual(body.limits, example.limits, "default env gives the limits of the example");
     assert.deepEqual(body.links, {
       source: "https://github.com/melogold-app/melogoldServer/tree/3f9c2ab1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8",
@@ -159,7 +165,14 @@ describe("the application around the server module", () => {
         headers: { "x-forwarded-proto": "https" },
       });
       const body = json(response);
-      assert.deepEqual(body.features, { playback: { version: 1 } });
+      // `configure` adds "playback" on top of what the real, already-implemented modules declare on their own
+      // (PLAN T1.3's account module: recoveryCode, export, accountDeletion).
+      assert.deepEqual(body.features, {
+        playback: { version: 1 },
+        recoveryCode: { version: 1 },
+        export: { version: 1 },
+        accountDeletion: { version: 1 },
+      });
       assert.equal(body.secureTransport, true);
       assert.equal(body.registration, "closed");
       assert.equal(body.publicUrl, "https://music.example.com");
