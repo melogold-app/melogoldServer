@@ -1,0 +1,202 @@
+{
+  "$comment": "Melogold playlist sync scenarios (docs/PLAN.md T2.2 acceptance; docs/DESIGN.md §3.4, §3.7, §3.16). Each scenario is a sequence of playlist.* ops (one per step, one device each) applied in order, with the OpResult status (and, for playlist.items.add/import, the redirect target) every step must produce, and the present items (in order) every named playlist must hold afterwards. `base` is either \"none\" (the device sends no base: it has not synced since before the scenario started) or \"afterStep:<index>\" (the device's cursor is exactly the head as it stood right after that earlier step, 0-based: it synced that far and no further). `videoId`s are 11 characters (API §1.6); `playlistId`s and recovery ids are fixed UUIDs so a reader can check `uuidv5(<playlistId>, NS_MELOGOLD_RECOVERY)` (docs/API.md §8) against `recoveryPlaylistId` by hand. Run today directly against the `OpCtx` factory (PLAN T2.2 dependency note); replayed verbatim through `POST /sync` once T2.1 merges.",
+  "license": "CC0-1.0",
+  "scenarios": [
+    {
+      "name": "playlist.items.add is redirected when its author did not know about the deletion",
+      "playlistId": "10000000-0000-4000-8000-000000000001",
+      "recoveryPlaylistId": "12a20c05-f149-5231-ab5b-61695ba7226c",
+      "steps": [
+        {
+          "opId": "20000000-0000-4000-8000-000000000001",
+          "device": "A",
+          "kind": "playlist.create",
+          "at": 1000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000001", "name": "Rock", "videoIds": ["aaaaaaaaaaa"] },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "20000000-0000-4000-8000-000000000002",
+          "device": "A",
+          "kind": "playlist.delete",
+          "at": 2000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000001" },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "20000000-0000-4000-8000-000000000003",
+          "device": "B",
+          "kind": "playlist.items.add",
+          "at": 1500,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000001", "videoIds": ["bbbbbbbbbbb"] },
+          "expectStatus": "redirected",
+          "expectRedirectTo": "12a20c05-f149-5231-ab5b-61695ba7226c"
+        }
+      ],
+      "expectFinal": {
+        "10000000-0000-4000-8000-000000000001": { "deleted": true, "items": [] },
+        "12a20c05-f149-5231-ab5b-61695ba7226c": { "deleted": false, "items": ["bbbbbbbbbbb"] }
+      }
+    },
+    {
+      "name": "playlist.items.add is rejected when its author's base already covers the deletion",
+      "playlistId": "10000000-0000-4000-8000-000000000002",
+      "steps": [
+        {
+          "opId": "20000000-0000-4000-8000-000000000004",
+          "device": "A",
+          "kind": "playlist.create",
+          "at": 1000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000002", "name": "Jazz", "videoIds": [] },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "20000000-0000-4000-8000-000000000005",
+          "device": "A",
+          "kind": "playlist.delete",
+          "at": 2000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000002" },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "20000000-0000-4000-8000-000000000006",
+          "device": "A",
+          "kind": "playlist.items.add",
+          "at": 2500,
+          "base": "afterStep:1",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000002", "videoIds": ["ccccccccccc"] },
+          "expectStatus": "rejected",
+          "expectCode": "playlist_deleted"
+        }
+      ],
+      "expectFinal": {
+        "10000000-0000-4000-8000-000000000002": { "deleted": true, "items": [] }
+      }
+    },
+    {
+      "name": "concurrent moves of different tracks are both kept",
+      "playlistId": "10000000-0000-4000-8000-000000000003",
+      "steps": [
+        {
+          "opId": "20000000-0000-4000-8000-000000000007",
+          "device": "A",
+          "kind": "playlist.create",
+          "at": 1000,
+          "base": "none",
+          "fields": {
+            "playlistId": "10000000-0000-4000-8000-000000000003",
+            "name": "Mix",
+            "videoIds": ["mmmmmmmmmm1", "mmmmmmmmmm2", "mmmmmmmmmm3"]
+          },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "20000000-0000-4000-8000-000000000008",
+          "device": "A",
+          "kind": "playlist.item.move",
+          "at": 2000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000003", "videoId": "mmmmmmmmmm1", "after": "mmmmmmmmmm3" },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "20000000-0000-4000-8000-000000000009",
+          "device": "B",
+          "kind": "playlist.item.move",
+          "at": 2000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000003", "videoId": "mmmmmmmmmm2", "after": "mmmmmmmmmm3" },
+          "expectStatus": "applied"
+        }
+      ],
+      "expectFinal": {
+        "10000000-0000-4000-8000-000000000003": { "deleted": false, "items": ["mmmmmmmmmm3", "mmmmmmmmmm2", "mmmmmmmmmm1"] }
+      }
+    },
+    {
+      "name": "playlist.items.replace does not remove an item a later manual add put there",
+      "playlistId": "10000000-0000-4000-8000-000000000004",
+      "steps": [
+        {
+          "opId": "2000000a-0000-4000-8000-000000000001",
+          "device": "A",
+          "kind": "playlist.create",
+          "at": 1000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000004", "name": "Mirror", "videoIds": ["xxxxxxxxxx2"] },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "2000000a-0000-4000-8000-000000000002",
+          "device": "B",
+          "kind": "playlist.items.add",
+          "at": 5000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000004", "videoIds": ["xxxxxxxxxx1"] },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "2000000a-0000-4000-8000-000000000003",
+          "device": "A",
+          "kind": "playlist.items.replace",
+          "at": 1000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000004", "videoIds": ["xxxxxxxxxx2"] },
+          "expectStatus": "superseded"
+        }
+      ],
+      "expectFinal": {
+        "10000000-0000-4000-8000-000000000004": { "deleted": false, "items": ["xxxxxxxxxx2", "xxxxxxxxxx1"] }
+      }
+    },
+    {
+      "name": "playlist.import does not resurrect a tombstone",
+      "playlistId": "10000000-0000-4000-8000-000000000005",
+      "steps": [
+        {
+          "opId": "2000000b-0000-4000-8000-000000000001",
+          "device": "A",
+          "kind": "playlist.create",
+          "at": 1000,
+          "base": "none",
+          "fields": {
+            "playlistId": "10000000-0000-4000-8000-000000000005",
+            "name": "Merged",
+            "videoIds": ["yyyyyyyyyy1", "yyyyyyyyyy2"]
+          },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "2000000b-0000-4000-8000-000000000002",
+          "device": "A",
+          "kind": "playlist.item.remove",
+          "at": 2000,
+          "base": "none",
+          "fields": { "playlistId": "10000000-0000-4000-8000-000000000005", "videoId": "yyyyyyyyyy1" },
+          "expectStatus": "applied"
+        },
+        {
+          "opId": "2000000b-0000-4000-8000-000000000003",
+          "device": "B",
+          "kind": "playlist.import",
+          "at": 3000,
+          "base": "none",
+          "fields": {
+            "playlistId": "10000000-0000-4000-8000-000000000005",
+            "name": "Merged",
+            "videoIds": ["yyyyyyyyyy1", "yyyyyyyyyy3"]
+          },
+          "expectStatus": "applied"
+        }
+      ],
+      "expectFinal": {
+        "10000000-0000-4000-8000-000000000005": { "deleted": false, "items": ["yyyyyyyyyy2", "yyyyyyyyyy3"] }
+      }
+    }
+  ]
+}
