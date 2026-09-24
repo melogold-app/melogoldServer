@@ -1,0 +1,387 @@
+{
+  "$comment": "Melogold sync scenarios: listening history (DESIGN §3.7, §3.11, §3.16; API §4.8). Each scenario starts with a fresh account whose devices are named in `devices`. A step sets the server clock to `now` and sends `ops` from `device` in one POST /sync; `results` are the expected OpResult fields in the order of `ops` (fields not listed are not compared; seq is for debugging only). After the last step, `expect` is the history stream of a pull from cursor \"\": `plays`, `playStats` and `playForgets` compared as sets (sorted here by eventId / videoId), with `device` naming the device whose deviceId the PlayRow carries. Times are API §1.5 strings.",
+  "license": "CC0-1.0",
+  "format": 1,
+  "scenarios": [
+    {
+      "name": "clear-vs-offline-plays",
+      "design": "DESIGN §3.16: A cleared the history at 12:00, B listened offline at 11:30 and 12:30 → only 12:30 stays in the history, the total counts both",
+      "devices": ["phone", "laptop"],
+      "steps": [
+        {
+          "now": "2026-09-23T11:05:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000001", "kind": "play.add", "at": "2026-09-23T11:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T11:00:00.000Z", "playTimeMs": 200000, "history": true, "playtime": true}
+          ],
+          "results": [{"status": "applied", "code": null, "replayed": false}]
+        },
+        {
+          "now": "2026-09-23T12:00:00.000Z",
+          "device": "laptop",
+          "ops": [
+            {"opId": "c1000000-0000-4000-8000-000000000001", "kind": "history.clear", "at": "2026-09-23T12:00:00.000Z", "eventsBefore": "2026-09-23T12:00:00.000Z"}
+          ],
+          "results": [{"status": "applied", "code": null, "replayed": false}]
+        },
+        {
+          "now": "2026-09-23T13:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000002", "kind": "play.add", "at": "2026-09-23T11:30:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T11:30:00.000Z", "playTimeMs": 180000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000003", "kind": "play.add", "at": "2026-09-23T12:30:00.000Z", "videoId": "abcdefghijk", "playedAt": "2026-09-23T12:30:00.000Z", "playTimeMs": 240000, "history": true, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        }
+      ],
+      "expect": {
+        "plays": [
+          {"eventId": "e1000000-0000-4000-8000-000000000003", "videoId": "abcdefghijk", "playedAt": "2026-09-23T12:30:00.000Z", "playTimeMs": 240000, "device": "phone"}
+        ],
+        "playStats": [
+          {"videoId": "a1B2c3D4e5F", "totalPlayTimeMs": 380000, "lastPlayedAt": "2026-09-23T11:00:00.000Z"},
+          {"videoId": "abcdefghijk", "totalPlayTimeMs": 240000, "lastPlayedAt": "2026-09-23T12:30:00.000Z"}
+        ],
+        "playForgets": [
+          {"videoId": "*", "eventsBefore": "2026-09-23T12:00:00.000Z", "totalBefore": null}
+        ]
+      }
+    },
+    {
+      "name": "lost-response-replay",
+      "design": "DESIGN §3.16: the response was lost and the request repeated → exactly one application (play_events key, sync_ops)",
+      "devices": ["phone"],
+      "steps": [
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000004", "kind": "play.add", "at": "2026-09-23T09:58:10.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:58:10.000Z", "playTimeMs": 212000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000020", "kind": "play.add", "at": "2026-09-23T09:59:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:59:00.000Z", "playTimeMs": 50000, "history": false, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        },
+        {
+          "now": "2026-09-23T10:01:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000004", "kind": "play.add", "at": "2026-09-23T09:58:10.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:58:10.000Z", "playTimeMs": 212000, "history": true, "playtime": true},
+            {"opId": "c1000000-0000-4000-8000-000000000002", "kind": "history.clear", "at": "2026-09-23T10:01:00.000Z", "eventsBefore": "2026-09-23T09:00:00.000Z"}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": true},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        },
+        {
+          "now": "2026-09-23T10:02:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "c1000000-0000-4000-8000-000000000002", "kind": "history.clear", "at": "2026-09-23T10:01:00.000Z", "eventsBefore": "2026-09-23T09:00:00.000Z"},
+            {"opId": "e1000000-0000-4000-8000-000000000004", "kind": "play.add", "at": "2026-09-23T09:58:10.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:58:10.000Z", "playTimeMs": 212000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000020", "kind": "play.add", "at": "2026-09-23T09:59:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:59:00.000Z", "playTimeMs": 50000, "history": false, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": true},
+            {"status": "applied", "code": null, "replayed": true},
+            {"status": "applied", "code": null, "replayed": true}
+          ]
+        }
+      ],
+      "expect": {
+        "plays": [
+          {"eventId": "e1000000-0000-4000-8000-000000000004", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:58:10.000Z", "playTimeMs": 212000, "device": "phone"}
+        ],
+        "playStats": [
+          {"videoId": "a1B2c3D4e5F", "totalPlayTimeMs": 262000, "lastPlayedAt": "2026-09-23T09:58:10.000Z"}
+        ],
+        "playForgets": [
+          {"videoId": "*", "eventsBefore": "2026-09-23T09:00:00.000Z", "totalBefore": null}
+        ]
+      }
+    },
+    {
+      "name": "forget-keeps-total",
+      "design": "DESIGN §3.11.5 «Убрать из Quick Picks»: the track's history up to the mark goes, its total stays; a late play before the mark counts but stays out of the history",
+      "devices": ["phone", "laptop"],
+      "steps": [
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000005", "kind": "play.add", "at": "2026-09-23T09:50:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:50:00.000Z", "playTimeMs": 100000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000006", "kind": "play.add", "at": "2026-09-23T09:55:00.000Z", "videoId": "abcdefghijk", "playedAt": "2026-09-23T09:55:00.000Z", "playTimeMs": 50000, "history": true, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        },
+        {
+          "now": "2026-09-23T12:00:00.000Z",
+          "device": "laptop",
+          "ops": [
+            {"opId": "f1000000-0000-4000-8000-000000000001", "kind": "history.forget", "at": "2026-09-23T12:00:00.000Z", "videoId": "a1B2c3D4e5F", "eventsBefore": "2026-09-23T12:00:00.000Z", "resetTotal": false}
+          ],
+          "results": [{"status": "applied", "code": null, "replayed": false}]
+        },
+        {
+          "now": "2026-09-23T12:30:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000007", "kind": "play.add", "at": "2026-09-23T11:50:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T11:50:00.000Z", "playTimeMs": 60000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000008", "kind": "play.add", "at": "2026-09-23T12:10:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T12:10:00.000Z", "playTimeMs": 70000, "history": true, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        }
+      ],
+      "expect": {
+        "plays": [
+          {"eventId": "e1000000-0000-4000-8000-000000000006", "videoId": "abcdefghijk", "playedAt": "2026-09-23T09:55:00.000Z", "playTimeMs": 50000, "device": "phone"},
+          {"eventId": "e1000000-0000-4000-8000-000000000008", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T12:10:00.000Z", "playTimeMs": 70000, "device": "phone"}
+        ],
+        "playStats": [
+          {"videoId": "a1B2c3D4e5F", "totalPlayTimeMs": 230000, "lastPlayedAt": "2026-09-23T12:10:00.000Z"},
+          {"videoId": "abcdefghijk", "totalPlayTimeMs": 50000, "lastPlayedAt": "2026-09-23T09:55:00.000Z"}
+        ],
+        "playForgets": [
+          {"videoId": "a1B2c3D4e5F", "eventsBefore": "2026-09-23T12:00:00.000Z", "totalBefore": null}
+        ]
+      }
+    },
+    {
+      "name": "forget-reset-total",
+      "design": "DESIGN §3.11.5 «Скрыть»: the total becomes 0; plays and baselines at or before total_before never count again; a repeated reset with the same mark keeps later plays",
+      "devices": ["phone", "laptop"],
+      "steps": [
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000009", "kind": "play.add", "at": "2026-09-23T09:50:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:50:00.000Z", "playTimeMs": 100000, "history": true, "playtime": true}
+          ],
+          "results": [{"status": "applied", "code": null, "replayed": false}]
+        },
+        {
+          "now": "2026-09-23T12:00:00.000Z",
+          "device": "laptop",
+          "ops": [
+            {"opId": "f1000000-0000-4000-8000-000000000002", "kind": "history.forget", "at": "2026-09-23T12:00:00.000Z", "videoId": "a1B2c3D4e5F", "eventsBefore": "2026-09-23T12:00:00.000Z", "resetTotal": true}
+          ],
+          "results": [{"status": "applied", "code": null, "replayed": false}]
+        },
+        {
+          "now": "2026-09-23T12:30:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000010", "kind": "play.add", "at": "2026-09-23T11:50:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T11:50:00.000Z", "playTimeMs": 60000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000011", "kind": "play.add", "at": "2026-09-23T12:10:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T12:10:00.000Z", "playTimeMs": 70000, "history": true, "playtime": true},
+            {"opId": "b1000000-0000-4000-8000-000000000001", "kind": "play.baseline", "at": "2026-09-23T11:59:00.000Z", "mode": "add", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 999}]},
+            {"opId": "b1000000-0000-4000-8000-000000000002", "kind": "play.baseline", "at": "2026-09-23T12:20:00.000Z", "mode": "atLeast", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 5000}]}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "superseded", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        },
+        {
+          "now": "2026-09-23T12:40:00.000Z",
+          "device": "laptop",
+          "ops": [
+            {"opId": "f1000000-0000-4000-8000-000000000003", "kind": "history.forget", "at": "2026-09-23T12:40:00.000Z", "videoId": "a1B2c3D4e5F", "eventsBefore": "2026-09-23T12:00:00.000Z", "resetTotal": true}
+          ],
+          "results": [{"status": "applied", "code": null, "replayed": false}]
+        }
+      ],
+      "expect": {
+        "plays": [
+          {"eventId": "e1000000-0000-4000-8000-000000000011", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T12:10:00.000Z", "playTimeMs": 70000, "device": "phone"}
+        ],
+        "playStats": [
+          {"videoId": "a1B2c3D4e5F", "totalPlayTimeMs": 70000, "lastPlayedAt": "2026-09-23T12:10:00.000Z"}
+        ],
+        "playForgets": [
+          {"videoId": "a1B2c3D4e5F", "eventsBefore": "2026-09-23T12:00:00.000Z", "totalBefore": "2026-09-23T12:00:00.000Z"}
+        ]
+      }
+    },
+    {
+      "name": "flags-clock-retention",
+      "design": "DESIGN §3.11.2 flags, §3.4 effAt = min(at, now), §3.11.3 retention window (exclusive at now − 400 days)",
+      "devices": ["phone"],
+      "steps": [
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000012", "kind": "play.add", "at": "2026-09-23T09:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:00:00.000Z", "playTimeMs": 300000, "history": false, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000013", "kind": "play.add", "at": "2026-09-23T09:10:00.000Z", "videoId": "abcdefghijk", "playedAt": "2026-09-23T09:10:00.000Z", "playTimeMs": 200000, "history": true, "playtime": false},
+            {"opId": "e1000000-0000-4000-8000-000000000014", "kind": "play.add", "at": "2026-09-23T11:00:00.000Z", "videoId": "dQw4w9WgXcQ", "playedAt": "2026-09-23T11:00:00.000Z", "playTimeMs": 150000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000015", "kind": "play.add", "at": "2025-08-19T10:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2025-08-19T10:00:00.000Z", "playTimeMs": 100000, "history": true, "playtime": true},
+            {"opId": "e1000000-0000-4000-8000-000000000016", "kind": "play.add", "at": "2025-08-19T10:00:00.001Z", "videoId": "a1B2c3D4e5F", "playedAt": "2025-08-19T10:00:00.001Z", "playTimeMs": 100000, "history": true, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        }
+      ],
+      "expect": {
+        "plays": [
+          {"eventId": "e1000000-0000-4000-8000-000000000013", "videoId": "abcdefghijk", "playedAt": "2026-09-23T09:10:00.000Z", "playTimeMs": 200000, "device": "phone"},
+          {"eventId": "e1000000-0000-4000-8000-000000000014", "videoId": "dQw4w9WgXcQ", "playedAt": "2026-09-23T10:00:00.000Z", "playTimeMs": 150000, "device": "phone"},
+          {"eventId": "e1000000-0000-4000-8000-000000000016", "videoId": "a1B2c3D4e5F", "playedAt": "2025-08-19T10:00:00.001Z", "playTimeMs": 100000, "device": "phone"}
+        ],
+        "playStats": [
+          {"videoId": "a1B2c3D4e5F", "totalPlayTimeMs": 500000, "lastPlayedAt": "2025-08-19T10:00:00.001Z"},
+          {"videoId": "abcdefghijk", "totalPlayTimeMs": 0, "lastPlayedAt": "2026-09-23T09:10:00.000Z"},
+          {"videoId": "dQw4w9WgXcQ", "totalPlayTimeMs": 150000, "lastPlayedAt": "2026-09-23T10:00:00.000Z"}
+        ],
+        "playForgets": []
+      }
+    },
+    {
+      "name": "invalid-ops",
+      "design": "DESIGN §3.9: a bad videoId → rejected invalid_video_id; a missing or wrong field → deferred invalid_payload; nothing is written",
+      "devices": ["phone"],
+      "steps": [
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "a0000000-0000-4000-8000-000000000001", "kind": "play.add", "at": "2026-09-23T09:00:00.000Z", "videoId": "invalid!id0", "playedAt": "2026-09-23T09:00:00.000Z", "playTimeMs": 1000, "history": true, "playtime": true},
+            {"opId": "a0000000-0000-4000-8000-000000000002", "kind": "play.add", "at": "2026-09-23T09:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:00:00.000Z", "playTimeMs": 1000, "history": false, "playtime": false},
+            {"opId": "a0000000-0000-4000-8000-000000000003", "kind": "play.add", "at": "2026-09-23T09:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:00:00.000Z", "playTimeMs": 0, "history": true, "playtime": true},
+            {"opId": "a0000000-0000-4000-8000-000000000004", "kind": "play.add", "at": "2026-09-23T09:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:00:00.000Z", "playTimeMs": 86400001, "history": true, "playtime": true},
+            {"opId": "a0000000-0000-4000-8000-000000000005", "kind": "play.add", "at": "2026-09-23T09:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23 09:00", "playTimeMs": 1000, "history": true, "playtime": true},
+            {"opId": "a0000000-0000-4000-8000-000000000006", "kind": "play.baseline", "at": "2026-09-23T09:00:00.000Z", "mode": "set", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 1}]},
+            {"opId": "a0000000-0000-4000-8000-000000000007", "kind": "play.baseline", "at": "2026-09-23T09:00:00.000Z", "mode": "add", "entries": []},
+            {"opId": "a0000000-0000-4000-8000-000000000008", "kind": "play.baseline", "at": "2026-09-23T09:00:00.000Z", "mode": "add", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 1}, {"videoId": "a1B2c3D4e5F", "totalMs": 2}]},
+            {"opId": "a0000000-0000-4000-8000-000000000009", "kind": "play.baseline", "at": "2026-09-23T09:00:00.000Z", "mode": "add", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 1}, {"videoId": "bad!", "totalMs": 1}]},
+            {"opId": "a0000000-0000-4000-8000-000000000010", "kind": "play.baseline", "at": "2026-09-23T09:00:00.000Z", "mode": "add", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 0}]},
+            {"opId": "a0000000-0000-4000-8000-000000000011", "kind": "history.clear", "at": "2026-09-23T09:00:00.000Z"},
+            {"opId": "a0000000-0000-4000-8000-000000000012", "kind": "history.forget", "at": "2026-09-23T09:00:00.000Z", "videoId": "x", "eventsBefore": "2026-09-23T09:00:00.000Z", "resetTotal": false},
+            {"opId": "a0000000-0000-4000-8000-000000000013", "kind": "history.forget", "at": "2026-09-23T09:00:00.000Z", "videoId": "a1B2c3D4e5F", "eventsBefore": "2026-09-23T09:00:00.000Z"}
+          ],
+          "results": [
+            {"status": "rejected", "code": "invalid_video_id", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "rejected", "code": "invalid_video_id", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false},
+            {"status": "rejected", "code": "invalid_video_id", "replayed": false},
+            {"status": "deferred", "code": "invalid_payload", "replayed": false}
+          ]
+        }
+      ],
+      "expect": {"plays": [], "playStats": [], "playForgets": []}
+    },
+    {
+      "name": "baseline-merge",
+      "design": "DESIGN §3.14: «Объединить» uploads play.baseline add, a silent merge atLeast; a baseline taken before a reset is skipped",
+      "devices": ["phone", "laptop"],
+      "steps": [
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "b1000000-0000-4000-8000-000000000003", "kind": "play.baseline", "at": "2026-09-23T09:00:00.000Z", "mode": "add", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 1000}, {"videoId": "abcdefghijk", "totalMs": 2000}]}
+          ],
+          "results": [{"status": "applied", "code": null, "replayed": false}]
+        },
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "laptop",
+          "ops": [
+            {"opId": "b1000000-0000-4000-8000-000000000004", "kind": "play.baseline", "at": "2026-09-23T09:30:00.000Z", "mode": "add", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 500}]},
+            {"opId": "b1000000-0000-4000-8000-000000000005", "kind": "play.baseline", "at": "2026-09-23T09:40:00.000Z", "mode": "atLeast", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 1200}, {"videoId": "abcdefghijk", "totalMs": 3000}]},
+            {"opId": "f1000000-0000-4000-8000-000000000004", "kind": "history.forget", "at": "2026-09-23T09:45:00.000Z", "videoId": "abcdefghijk", "eventsBefore": "2026-09-23T09:45:00.000Z", "resetTotal": true},
+            {"opId": "b1000000-0000-4000-8000-000000000006", "kind": "play.baseline", "at": "2026-09-23T09:44:00.000Z", "mode": "atLeast", "entries": [{"videoId": "abcdefghijk", "totalMs": 3000}]},
+            {"opId": "b1000000-0000-4000-8000-000000000007", "kind": "play.baseline", "at": "2026-09-23T09:50:00.000Z", "mode": "atLeast", "entries": [{"videoId": "a1B2c3D4e5F", "totalMs": 1400}, {"videoId": "abcdefghijk", "totalMs": 700}]}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "superseded", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        }
+      ],
+      "expect": {
+        "plays": [],
+        "playStats": [
+          {"videoId": "a1B2c3D4e5F", "totalPlayTimeMs": 1500, "lastPlayedAt": null},
+          {"videoId": "abcdefghijk", "totalPlayTimeMs": 700, "lastPlayedAt": null}
+        ],
+        "playForgets": [
+          {"videoId": "abcdefghijk", "eventsBefore": "2026-09-23T09:45:00.000Z", "totalBefore": "2026-09-23T09:45:00.000Z"}
+        ]
+      }
+    },
+    {
+      "name": "clear-clamps-and-grows",
+      "design": "DESIGN §3.7 history.clear: the mark is min(eventsBefore, now), inclusive, and only grows",
+      "devices": ["phone", "laptop"],
+      "steps": [
+        {
+          "now": "2026-09-23T10:00:00.000Z",
+          "device": "phone",
+          "ops": [
+            {"opId": "e1000000-0000-4000-8000-000000000017", "kind": "play.add", "at": "2026-09-23T09:59:59.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T09:59:59.000Z", "playTimeMs": 1000, "history": true, "playtime": true},
+            {"opId": "c1000000-0000-4000-8000-000000000003", "kind": "history.clear", "at": "2026-09-23T10:00:00.000Z", "eventsBefore": "2026-09-23T15:00:00.000Z"},
+            {"opId": "e1000000-0000-4000-8000-000000000018", "kind": "play.add", "at": "2026-09-23T10:00:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T10:00:00.000Z", "playTimeMs": 2000, "history": true, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        },
+        {
+          "now": "2026-09-23T11:00:00.000Z",
+          "device": "laptop",
+          "ops": [
+            {"opId": "c1000000-0000-4000-8000-000000000004", "kind": "history.clear", "at": "2026-09-23T11:00:00.000Z", "eventsBefore": "2026-09-23T09:00:00.000Z"},
+            {"opId": "e1000000-0000-4000-8000-000000000019", "kind": "play.add", "at": "2026-09-23T10:30:00.000Z", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T10:30:00.000Z", "playTimeMs": 3000, "history": true, "playtime": true}
+          ],
+          "results": [
+            {"status": "applied", "code": null, "replayed": false},
+            {"status": "applied", "code": null, "replayed": false}
+          ]
+        }
+      ],
+      "expect": {
+        "plays": [
+          {"eventId": "e1000000-0000-4000-8000-000000000019", "videoId": "a1B2c3D4e5F", "playedAt": "2026-09-23T10:30:00.000Z", "playTimeMs": 3000, "device": "laptop"}
+        ],
+        "playStats": [
+          {"videoId": "a1B2c3D4e5F", "totalPlayTimeMs": 6000, "lastPlayedAt": "2026-09-23T10:30:00.000Z"}
+        ],
+        "playForgets": [
+          {"videoId": "*", "eventsBefore": "2026-09-23T10:00:00.000Z", "totalBefore": null}
+        ]
+      }
+    }
+  ]
+}
