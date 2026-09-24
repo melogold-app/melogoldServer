@@ -1,0 +1,7 @@
+# TLS for SITE_ADDRESS from Let's Encrypt or ZeroSSL; the server compresses and streams SSE on its own.
+{$SITE_ADDRESS} {
+	request_body {
+		max_size 5MB
+	}
+	reverse_proxy melogold:8080
+}

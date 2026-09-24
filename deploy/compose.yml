@@ -1,0 +1,56 @@
+# Melogold server behind Caddy (automatic HTTPS): one container, SQLite in a volume (DESIGN §7).
+#
+#   cp deploy/.env.example deploy/.env      # set SITE_ADDRESS and PUBLIC_URL
+#   GIT_SHA=$(git rev-parse HEAD) docker compose -f deploy/compose.yml --env-file deploy/.env up -d --build
+#
+# Until the installer of PLAN T3.2 exists this is the whole deployment; `docker compose … logs -f melogold` shows the
+# server, `docker compose … exec melogold melogold info --json` its state.
+name: melogold
+
+services:
+  melogold:
+    build:
+      context: ..
+      args:
+        APP_VERSION: ${APP_VERSION:-0.1.0-dev}
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: melogold-server:local
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL}
+      # Caddy on the network below: X-Forwarded-For and X-Forwarded-Proto are its own
+      TRUST_PROXY: 172.30.0.0/24
+      REGISTRATION: ${REGISTRATION:-first}
+      INSTANCE_NAME: ${INSTANCE_NAME:-Melogold}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - data:/data
+    mem_limit: 512m
+    networks: [internal]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [melogold]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  data:
+  caddy-data:
+  caddy-config:
