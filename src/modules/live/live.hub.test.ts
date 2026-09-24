@@ -1,7 +1,8 @@
 /**
  * The live hub (DESIGN §4.7, API §6): delivery by target, the envelope, stream limits with eviction of the oldest,
- * closing, coalescing (`sync.changed`: leading event, then one trailing event per window), and the order of
- * `afterRemove` (session.invalidated → close → devices.updated).
+ * closing (one stream, a device, a user, everything), the heartbeat (pings, expiry as a safety net), coalescing
+ * (`sync.changed`: leading event, then one trailing event per window), and the order of `afterRemove`
+ * (session.invalidated → close → devices.updated).
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -131,7 +132,7 @@ describe("LiveHub.publish", () => {
     });
     const b = open(USER, DEV_B);
     hub.publish(USER, "devices.updated", { reason: "device_renamed", deviceId: DEV_A });
-    assert.deepEqual(broken.recorded.closed, ["device_closed"]);
+    assert.deepEqual(broken.recorded.closed, ["broken"]);
     assert.equal(b.recorded.events.length, 1);
     assert.equal(hub.count(USER), 1);
   });
@@ -187,6 +188,25 @@ describe("LiveHub limits and closing", () => {
     assert.deepEqual(hub.streams(), []);
   });
 
+  test("closeStream closes one stream once; a stream already gone is ignored", () => {
+    const { hub, open } = setup();
+    const a1 = open(USER, DEV_A);
+    const a2 = open(USER, DEV_A);
+    hub.closeStream(a1.stream, "expired");
+    hub.closeStream(a1.stream, "outdated");
+    assert.deepEqual(a1.recorded.closed, ["expired"]);
+    assert.deepEqual(a2.recorded.closed, []);
+    a2.unregister();
+    hub.closeStream(a2.stream, "expired");
+    assert.deepEqual(a2.recorded.closed, []);
+    assert.equal(hub.count(), 0);
+  });
+
+  test("the timers of the hub are the injected ones", () => {
+    const { hub, timers } = setup();
+    assert.equal(hub.timers, timers);
+  });
+
   test("afterRemove: session.invalidated, then the streams close, then devices.updated to the others", () => {
     const { hub, open } = setup();
     const order: string[] = [];
@@ -200,6 +220,59 @@ describe("LiveHub limits and closing", () => {
     });
     afterRemove(hub, { userId: USER, deviceIds: [DEV_A], reason: "device_revoked" });
     assert.deepEqual(order, ["A:session.invalidated", "A:close:device_closed", "B:devices.updated"]);
+  });
+});
+
+describe("LiveHub.heartbeat", () => {
+  test("pings every stream with the time of the clock; streams without ping are skipped", () => {
+    const { hub, clock, open } = setup();
+    const pings: [string, number][] = [];
+    open(USER, DEV_A, { ping: (now) => pings.push(["A", now]) });
+    open(OTHER_USER, DEV_C, { ping: (now) => pings.push(["C", now]) });
+    const silent = open(USER, DEV_B);
+    clock.advance(25_000);
+    hub.heartbeat();
+    assert.deepEqual(pings, [
+      ["A", T0 + 25_000],
+      ["C", T0 + 25_000],
+    ]);
+    assert.deepEqual(silent.recorded.closed, []);
+    assert.equal(hub.count(), 3);
+  });
+
+  test("a stream whose token expired is closed instead of pinged (safety net for the expiry timer)", () => {
+    const { hub, clock, open } = setup();
+    const pinged: string[] = [];
+    const old = open(USER, DEV_A, { expiresAt: T0 + 60_000, ping: () => pinged.push("old") });
+    const fresh = open(USER, DEV_A, { expiresAt: T0 + 900_000, ping: () => pinged.push("fresh") });
+    clock.set(T0 + 59_999);
+    hub.heartbeat();
+    assert.deepEqual(pinged, ["old", "fresh"]);
+    clock.set(T0 + 60_000);
+    hub.heartbeat();
+    assert.deepEqual(old.recorded.closed, ["expired"]);
+    assert.deepEqual(fresh.recorded.closed, []);
+    assert.deepEqual(pinged, ["old", "fresh", "fresh"]);
+  });
+
+  test("a stream whose ping throws is closed as broken and logged; the others are still pinged", () => {
+    const { hub, log, open } = setup();
+    const broken = open(USER, DEV_A, {
+      ping: () => {
+        throw new Error("socket gone");
+      },
+    });
+    let pinged = 0;
+    open(USER, DEV_B, { ping: () => (pinged += 1) });
+    assert.doesNotThrow(() => {
+      hub.heartbeat();
+    });
+    assert.deepEqual(broken.recorded.closed, ["broken"]);
+    assert.equal(pinged, 1);
+    assert.deepEqual(
+      log.map((entry) => entry.level),
+      ["warn"],
+    );
   });
 });
 
