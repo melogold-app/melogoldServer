@@ -1,5 +1,6 @@
 """End-to-end check of a live Melogold server (Python 3 standard library only): two devices of one account, SSE,
-library/playlists/history sync, playback handoff, revocation, and the test account deleted at the end.
+library/playlists/history sync, playback handoff, lyrics (own, shared, tombstone), revocation, and the test accounts
+deleted at the end.
 
     python3 scripts/live-check.py https://music.example.com
 
@@ -198,6 +199,43 @@ put_a["at"], put_a["positionMs"] = now_iso(), 50000
 _, result = call("PUT", "/playback/state", put_a, token=token_a, sync=True, expect=200)
 check("A: its next update is refused as handed_off", result["applied"] is False and result["reason"] == "handed_off",
       result)
+
+# Lyrics: A saves its version; B hears lyrics.changed and pulls it; another account sees it as shared; DELETE
+if "lyrics" in info["features"]:
+    lrc = "[00:12.30]Я вернусь\n[00:15.80]Когда растает снег"
+    status, mine = call("PUT", f"/lyrics/{VIDEO_B}", {"synced": lrc, "syncedFormat": "lrc", "syncedSource": "user",
+                                                    "plain": "Я вернусь\nКогда растает снег", "plainSource": "lrclib"},
+                        token=token_a)
+    check("A: PUT /lyrics saves its version", status == 200 and mine["rev"] >= 1 and mine["text"]["synced"] == lrc,
+          f"{status} {mine}")
+    changed = events_b.wait_for("lyrics.changed")
+    check("B: lyrics.changed with the video and rev", changed["payload"] == {"videoId": VIDEO_B, "rev": mine["rev"]},
+          changed)
+    _, page = call("POST", "/auth/me/lyrics/changes", {"after": 0}, token=token_b, expect=200)
+    check("B: the changes feed brings A's version",
+          any(i["videoId"] == VIDEO_B and i["text"]["synced"] == lrc for i in page["items"]), page)
+    other_login, other_password = "e2e" + secrets.token_hex(4), "другой аккаунт " + secrets.token_hex(4)
+    _, other_challenge = call("GET", "/auth/register/challenge", expect=200)
+    other = {"login": other_login, "password": other_password, "device": device("E2E Other", "windows")}
+    if other_challenge["bits"] > 0:
+        other["pow"] = {"challenge": other_challenge["challenge"],
+                        "nonce": solve_pow(other_challenge["challenge"], other_challenge["bits"])}
+    status, other_session = call("POST", "/auth/register", other)
+    check("register another account", status == 201, f"{status} {other_session}")
+    token_c = other_session["tokens"]["accessToken"]
+    _, seen = call("GET", f"/lyrics/{VIDEO_B}", token=token_c, expect=200)
+    check("another account: no own version, A's as shared",
+          seen["mine"] is None and seen["shared"] and seen["shared"]["text"]["synced"] == lrc, seen)
+    status, _ = call("DELETE", f"/lyrics/{VIDEO_B}", token=token_a)
+    check("A: DELETE /lyrics", status == 204, status)
+    time.sleep(2.5)
+    _, page = call("POST", "/auth/me/lyrics/changes", {"after": mine["rev"]}, token=token_b, expect=200)
+    check("B: the tombstone comes down", [(i["videoId"], i["deleted"]) for i in page["items"]] == [(VIDEO_B, True)],
+          page)
+    _, seen = call("GET", f"/lyrics/{VIDEO_B}", token=token_c, expect=200)
+    check("another account: the shared version is gone", seen["shared"] is None, seen)
+    status, body = call("POST", "/auth/me/delete", {"password": other_password}, token=token_c)
+    check("another account deleted", status in (200, 204), f"{status} {body}")
 
 # Revocation: A signs B out; B's stream gets session.invalidated and its token stops working
 device_b_id = session_b["device"]["id"]
