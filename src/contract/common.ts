@@ -184,7 +184,7 @@ export const Hwid = matching(HWID_PATTERN).meta({
 });
 
 export const Platform = matching(PLATFORM_PATTERN).meta({
-  description: "Known values: android, macos, windows, linux, other. Stored as sent (API §1.6).",
+  description: "Known values: android, ios, ipados, macos, visionos, windows, linux, other. Stored as sent (API §1.6).",
 });
 
 /**
