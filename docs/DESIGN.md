@@ -60,7 +60,7 @@
   - состояние «продолжить на другом устройстве».
 
   Аудио, загрузок, прокси YouTube и OpenSubsonic нет. Клиенты ходят в YouTube сами.
-- **Клиенты:** Android (Kotlin); Apple — macOS, iOS, iPadOS, visionOS и watchOS (Swift, одно приложение и спутник для часов); Windows (C#); Linux (Rust). Все собираются по `openapi.json` из релиза сервера.
+- **Клиенты:** Android (Kotlin); Apple — macOS, iOS, iPadOS, visionOS и watchOS (Swift; приложение для часов самостоятельное, со своим входом); Windows (C#); Linux (Rust). Все собираются по `openapi.json` из релиза сервера.
 - **Стек:**
   - Node 24 LTS, TypeScript без сборки (type stripping);
   - Fastify 5, zod 4, OpenAPI 3.0.3;

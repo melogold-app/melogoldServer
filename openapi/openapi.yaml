@@ -3163,8 +3163,8 @@ components:
         platform:
           type: string
           pattern: ^[a-z0-9_]{1,16}$
-          description: "Known values: android, ios, ipados, macos, visionos, windows,
-            linux, other. Stored as sent (API §1.6)."
+          description: "Known values: android, ios, ipados, macos, visionos, watchos,
+            windows, linux, other. Stored as sent (API §1.6)."
         osVersion:
           nullable: true
           type: string
