@@ -32,9 +32,10 @@ export const FEATURE_KEYS: readonly FeatureKey[] = Object.freeze([
   "export",
   "accountDeletion",
   "registrationPow",
+  "lyrics",
 ]);
 
-/** `{version: 1}`: `playback`, `recoveryCode`, `export`, `accountDeletion`, `registrationPow`. */
+/** `{version: 1}`: `playback`, `recoveryCode`, `export`, `accountDeletion`, `registrationPow`, `lyrics`. */
 export const FEATURE_V1: Readonly<{ version: number }> = Object.freeze({ version: 1 });
 
 /** `features.sync` for the kinds this server applies (`implementedOpKinds()` of `src/modules/sync/ops`). */

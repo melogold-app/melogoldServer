@@ -37,6 +37,7 @@ describe("FeatureRegistry", () => {
       "export",
       "accountDeletion",
       "registrationPow",
+      "lyrics",
     ]);
   });
 

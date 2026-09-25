@@ -27,6 +27,7 @@ import { registerAuthRoutes } from "./modules/auth/auth.routes.ts";
 import { registerDevicesRoutes } from "./modules/devices/devices.routes.ts";
 import { registerLinkingRoutes } from "./modules/linking/linking.routes.ts";
 import { registerLiveRoutes } from "./modules/live/live.routes.ts";
+import { registerLyricsRoutes } from "./modules/lyrics/lyrics.routes.ts";
 import { registerPlaybackRoutes } from "./modules/playback/playback.routes.ts";
 import { registerServerRoutes } from "./modules/server/server.routes.ts";
 import { registerSyncRoutes } from "./modules/sync/sync.routes.ts";
@@ -44,6 +45,7 @@ export const ROUTE_MODULES: readonly Readonly<{ name: string; register: RouteMod
   { name: "live", register: registerLiveRoutes },
   { name: "sync", register: registerSyncRoutes },
   { name: "playback", register: registerPlaybackRoutes },
+  { name: "lyrics", register: registerLyricsRoutes },
 ]);
 
 /** Step 1: a bare instance with its logger (`server.ts` logs the startup with it before the routes exist). */

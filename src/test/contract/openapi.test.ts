@@ -93,7 +93,7 @@ describe("OpenAPI document", () => {
 
   test("operations are the rows of API §3 with operationId, status, security and X-Sync-Protocol", () => {
     const expected = apiRoutes().filter((route) => route.operationId !== null);
-    assert.equal(expected.length, 36);
+    assert.equal(expected.length, 40);
     assert.deepEqual(
       operations.map(({ method, path }) => `${method} ${path}`).sort(),
       expected.map((route) => `${route.method} ${route.path}`).sort(),
@@ -243,7 +243,7 @@ describe("OpenAPI document", () => {
         assert.equal(schema.type, "object", where);
       }
     }
-    assert.equal(nullableReferences, 14);
+    assert.equal(nullableReferences, 17);
   });
 
   test("components are exactly the contract; every $ref resolves; no additionalProperties: false", () => {

@@ -35,6 +35,7 @@ describe("live event catalog (API §6)", () => {
       "session.invalidated": ["device", null],
       "account.updated": ["others", null],
       "link.updated": ["device", null],
+      "lyrics.changed": ["others", 2000],
     });
     assert.ok(isLiveEventType("sync.changed"));
     assert.ok(!isLiveEventType("sync.unknown"));

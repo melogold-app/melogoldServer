@@ -243,6 +243,23 @@ export type PlayForgetsTable = {
   seq: number; // BIG
 };
 
+export type LyricsTable = {
+  id: string; // ID
+  user_id: string; // ID
+  video_id: string; // ID
+  rev: number; // BIG
+  deleted: Generated<0 | 1>; // BOOL
+  plain: string | null; // TXT
+  plain_source: string | null; // TXT
+  synced: string | null; // TXT
+  synced_format: string | null; // TXT
+  synced_source: string | null; // TXT
+  start_time_ms: number | null; // BIG
+  language: string | null; // TXT
+  created_at: number; // TS
+  updated_at: number; // TS
+};
+
 export type Database = {
   server_meta: ServerMetaTable;
   users: UsersTable;
@@ -261,4 +278,5 @@ export type Database = {
   play_events: PlayEventsTable;
   play_stats: PlayStatsTable;
   play_forgets: PlayForgetsTable;
+  lyrics: LyricsTable;
 };

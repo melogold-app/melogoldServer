@@ -55,6 +55,7 @@ export const ServerFeatures = z
     export: FeatureVersion.optional(),
     accountDeletion: FeatureVersion.optional(),
     registrationPow: FeatureVersion.optional().meta({ description: "Present while proof of work is required." }),
+    lyrics: FeatureVersion.optional().meta({ description: "Lyrics of the user and shared ones (API §4.10)." }),
   })
   .meta({ id: "ServerFeatures", description: "An absent key means the feature is not supported (API §1.3)." });
 

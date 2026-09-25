@@ -165,7 +165,7 @@ describe("routes of API §3", () => {
   });
 
   test("every route of API §3 exists, and no other", () => {
-    assert.equal(ROUTES.length, 39);
+    assert.equal(ROUTES.length, 43);
     const actual = registered
       .flatMap((route) =>
         (Array.isArray(route.method) ? route.method : [route.method]).map((method) => `${method} ${route.url}`),

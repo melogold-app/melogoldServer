@@ -60,8 +60,8 @@ function apiRoutes(): ApiRoute[] {
 describe("route policy vs API §3", () => {
   const routes = apiRoutes();
 
-  test("the table was parsed (38 numbered routes and /docs)", () => {
-    assert.equal(routes.length, 39);
+  test("the table was parsed (42 numbered routes and /docs)", () => {
+    assert.equal(routes.length, 43);
   });
 
   test("every API route is in the policy table with its auth and X-Sync-Protocol", () => {

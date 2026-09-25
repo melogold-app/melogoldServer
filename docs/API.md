@@ -170,6 +170,7 @@
 - `/sync/merge-plan` — 1 МиБ;
 - `/playback/state` — 128 КиБ;
 - `/auth/**` — 16 КиБ;
+- `/lyrics/{videoId}` — 1 МиБ;
 - остальное — 64 КиБ.
 
 Превышение любого из них → `413 payload_too_large`.
@@ -208,6 +209,7 @@
 | `GET /playback/state` | 60/мин device |
 | `PUT /playback/state` | 30/мин device |
 | `DELETE /playback/state` | 10/мин user |
+| `PUT /lyrics/{videoId}`, `DELETE /lyrics/{videoId}` | 60/мин user |
 | `/health*`, `/openapi.json`, `/docs` | без лимита |
 
 ---
@@ -347,10 +349,14 @@ type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код
 | 36 | GET | `/playback/state` | `getPlaybackState` | Bearer + XSP | 200 | состояние |
 | 37 | PUT | `/playback/state` | `putPlaybackState` | Bearer + XSP | 200 | публикация |
 | 38 | DELETE | `/playback/state` | `clearPlaybackState` | Bearer + XSP | 204 | «забыть текущее воспроизведение» |
+| 39 | GET | `/lyrics/{videoId}` | `getLyrics` | Bearer | 200 | своя и общая версия текста трека |
+| 40 | PUT | `/lyrics/{videoId}` | `putLyrics` | Bearer | 200 | сохранить свою версию текста |
+| 41 | DELETE | `/lyrics/{videoId}` | `deleteLyrics` | Bearer | 204 | удалить свою версию текста |
+| 42 | POST | `/auth/me/lyrics/changes` | `listMyLyricsChanges` | Bearer | 200 | свои версии текстов, изменённые после `after` |
 | — | GET | `/docs` | — | public | 200 | только при `OPENAPI_DOCS_UI=true` |
 
 - XSP — заголовок `X-Sync-Protocol`.
-- Параметры `{deviceId}` и `{linkId}` имеют тип `Uuid`. Неверный формат → `400 invalid_request`.
+- Параметры `{deviceId}` и `{linkId}` имеют тип `Uuid`, `{videoId}` — тип `VideoId`. Неверный формат → `400 invalid_request`.
 - Маршрутов `/history*`, `/link/*` и `DELETE /auth/me/devices/{id}` **нет**.
 
 ---
@@ -444,6 +450,7 @@ type ServerInfo = {
     deviceLinking?: { version: number; modes: string[]; ttlSeconds: number; longPollSeconds: number };
     recoveryCode?: { version: number }; export?: { version: number }; accountDeletion?: { version: number };
     registrationPow?: { version: number };      // есть, если PoW сейчас требуется
+    lyrics?: { version: number };               // §4.10
   };
   limits: ServerLimits;               // §11
   links: { source: string /* …/tree/<GIT_SHA> */; privacy: string | null; contact: string | null };
@@ -456,7 +463,7 @@ type ServerInfo = {
  "secureTransport":true,"registration":"open",
  "features":{"sync":{"protocol":1,"minProtocol":1,"kinds":["like.set","bookmark.set","playlist.create","playlist.update","playlist.delete","playlist.items.add","playlist.item.remove","playlist.item.move","playlist.items.replace","playlist.import","play.add","play.baseline","history.clear","history.forget"],"streams":["library","history"]},
   "playback":{"version":1},"deviceLinking":{"version":1,"modes":["request","invite"],"ttlSeconds":300,"longPollSeconds":25},
-  "recoveryCode":{"version":1},"export":{"version":1},"accountDeletion":{"version":1},"registrationPow":{"version":1}},
+  "recoveryCode":{"version":1},"export":{"version":1},"accountDeletion":{"version":1},"registrationPow":{"version":1},"lyrics":{"version":1}},
  "limits":{"sync":{"maxOpsPerRequest":500,"maxBodyBytes":4194304,"maxWorkUnitsPerRequest":20000,"defaultPageSize":500,"maxPageSize":2000,"maxVideoIdsPerAdd":500,"maxVideoIdsPerList":10000,"maxBaselineEntries":500,"maxIncludeKeys":1000,"maxPlaylists":1000,"maxPlaylistItems":10000,"maxItemsTotal":100000,"maxLikes":100000,"maxBookmarksPerType":20000,"maxTracks":150000,"maxPlayStats":100000,"maxPlayEvents":60000,"playAddPerHour":2000},
   "history":{"retentionDays":400,"maxEvents":50000,"mergeUploadMax":20000},
   "playback":{"queueMax":200,"maxBodyBytes":131072},
@@ -886,6 +893,68 @@ type PlaybackPutResult = {
 - **`GET`** → `{"state":null,"serverTime":"…"}` (нет состояния или очищено) либо полное состояние.
 - **`DELETE`** → 204. Сервер ставит надгробие, затем SSE `playback.updated{cleared:true}`.
 
+### 4.10 Тексты песен
+Свои тексты пользователя: набранные и синхронизированные в редакторе, импортированные из файла или выбранные вместо найденного автоматически. У пользователя не больше одной версии на `videoId`.
+- Его устройства получают версии через `POST /auth/me/lyrics/changes` и событие `lyrics.changed`.
+- Остальные пользователи сервера видят версию как `shared`, когда своего текста у них нет. Автор общей версии не раскрывается.
+
+```ts
+type LyricsText = {
+  plain: string | null;                  // обычный текст, ≤50 000
+  plainSource: string | null;            // user|file|youtube_music|lrclib|kugou
+  synced: string | null;                 // синхронный текст, ≤200 000
+  syncedFormat: string | null;           // lrc|ttml; есть вместе с synced
+  syncedSource: string | null;           // как plainSource
+  startTimeMs: number | null;            // где в треке начинается синхронный текст
+  language: string | null;               // BCP 47
+};
+type LyricsPut = {
+  plain?: string; plainSource?: string /*user|file|youtube_music|lrclib|kugou*/;
+  synced?: string; syncedFormat?: string /*lrc|ttml*/; syncedSource?: string;
+  startTimeMs?: number /*0..86 400 000*/; language?: string /*≤35*/;
+};
+type MyLyrics = {
+  id: Uuid; videoId: VideoId;
+  rev: number;                           // счётчик изменений пользователя, растёт с каждым PUT и DELETE
+  deleted: boolean;                      // надгробие DELETE; text тогда null
+  text: LyricsText | null; updatedAt: Iso;
+};
+type SharedLyrics = { id: Uuid; videoId: VideoId; text: LyricsText; updatedAt: Iso };
+type LyricsResponse = { mine: MyLyrics | null; shared: SharedLyrics | null; serverTime: Iso };
+type LyricsChangesRequest = { after: number; limit?: number /*1..200, по умолчанию 100*/ };
+type MyLyricsPage = {
+  items: MyLyrics[];                     // rev > after, по возрастанию rev
+  rev: number;                           // after для следующего запроса
+  more: boolean;                         // есть ещё страницы
+};
+```
+**`PUT /lyrics/{videoId}`:**
+```json
+{"plain":"Я вернусь\nКогда растает снег","plainSource":"lrclib","synced":"[00:12.30]Я вернусь\n[00:15.80]Когда растает снег","syncedFormat":"lrc","syncedSource":"user","startTimeMs":null,"language":"ru"}
+```
+```json
+{"mine":{"id":"5d2c7e1a-9b3f-4c6d-8e2a-1f0b3c4d5e6f","videoId":"dQw4w9WgXcQ","rev":3,"deleted":false,"text":{"plain":"Я вернусь\nКогда растает снег","plainSource":"lrclib","synced":"[00:12.30]Я вернусь\n[00:15.80]Когда растает снег","syncedFormat":"lrc","syncedSource":"user","startTimeMs":null,"language":"ru"},"updatedAt":"2026-09-25T12:00:00.000Z"},"shared":null,"serverTime":"2026-09-25T12:00:00.020Z"}
+```
+- **`PUT`** создаёт или заменяет свою версию и отвечает `MyLyrics`.
+  - Нужен хотя бы один из `plain` и `synced`. `syncedFormat` обязателен вместе с `synced` и запрещён без него. Иначе `400 invalid_request`.
+  - Источник без текста своей стороны игнорируется, текст без источника хранится с `null`.
+  - Если содержимое не изменилось, `rev` не растёт и события нет.
+  - Иначе `rev` = max(`rev` пользователя) + 1 под `lockUser`, после commit — `lyrics.changed` другим устройствам.
+- **`DELETE`** → 204. Сервер ставит надгробие: `deleted: true`, текст стирается, `rev` растёт, событие. Нет версии или она уже удалена → 204 без изменений.
+- **`GET /lyrics/{videoId}`** → `LyricsResponse` (пример выше):
+  - `mine` — своя версия, без надгробий;
+  - `shared` — версия другого пользователя: сначала с синхронным текстом, затем только с обычным, среди них самая свежая.
+- **`POST /auth/me/lyrics/changes`** → `MyLyricsPage` (пример ниже):
+  - свои версии с `rev > after` по возрастанию `rev`, не больше `limit`. При `after = 0` надгробий нет: это первая загрузка;
+  - `rev` ответа — `after` для следующего запроса, `more: true` — есть ещё.
+- **Лимиты:** `plain` ≤ 50 000 и `synced` ≤ 200 000 единиц UTF-16, тело ≤ 1 МиБ (§1.9), `language` ≤ 35.
+- **Ошибки:** `400`, `413`, `503 storage_full` (`PUT`).
+- **Выгрузка аккаунта** (§4.5) тексты пока не включает. При удалении аккаунта они удаляются каскадом.
+
+```json
+{"items":[{"id":"5d2c7e1a-9b3f-4c6d-8e2a-1f0b3c4d5e6f","videoId":"dQw4w9WgXcQ","rev":4,"deleted":true,"text":null,"updatedAt":"2026-09-25T12:05:00.000Z"}],"rev":4,"more":false}
+```
+
 ---
 
 ## 5. Состояния и переходы, на которые ссылается контракт
@@ -915,7 +984,7 @@ type PlaybackPutResult = {
 - кадр события: `id: <uuid>\ndata: <LiveEvent JSON>\n\n`, **без строки `event:`**;
 - heartbeat — комментарий `: heartbeat <ms>` каждые `SSE_HEARTBEAT_SECONDS`.
 
-**Реплея нет,** `Last-Event-ID` игнорируется. После (пере)подключения клиент делает `POST /sync` (если есть binding), `GET /playback/state` и перечитывает открытые экраны.
+**Реплея нет,** `Last-Event-ID` игнорируется. После (пере)подключения клиент делает `POST /sync` (если есть binding), `GET /playback/state`, `POST /auth/me/lyrics/changes` и перечитывает открытые экраны.
 
 **Сервер закрывает поток:**
 - при `exp` access-токена, которым поток открыт;
@@ -945,6 +1014,7 @@ type LiveEvent = { id: Uuid; type: string; at: Iso; payload: object | null };
 | `session.invalidated` | адресно | `SessionInvalidatedPayload {reason, forceRelogin: true}`; reason: `device_revoked\|password_changed\|recovery_reset\|token_reuse\|account_deleted` | до закрытия потоков |
 | `account.updated` | все, кроме автора | `AccountUpdatedPayload {reason, byDevice: {id, name}}`; reason: `password_changed\|password_changed_without_old\|recovery_code_rotated` | действия безопасности |
 | `link.updated` | устройство-одобряющее | `LinkUpdatedPayload {linkId, status}`; status: `claimed\|cancelled\|completed` | действие другой стороны |
+| `lyrics.changed` | все, кроме автора | `LyricsChangedPayload {videoId, rev}` | после commit `PUT` и `DELETE /lyrics/{videoId}`, которые что-то изменили; склейка 2 с |
 
 ```ts
 type PlaybackSummary = {
@@ -1336,6 +1406,26 @@ CREATE TABLE play_forgets (
   PRIMARY KEY (user_id, video_id)
 );
 CREATE INDEX play_forgets_pull ON play_forgets (user_id, seq);
+-- ===== 0006_lyrics ========================================================
+CREATE TABLE lyrics (
+  id            ID   NOT NULL PRIMARY KEY,
+  user_id       ID   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video_id      ID   NOT NULL CHECK (length(video_id) = 11),
+  rev           BIG  NOT NULL CHECK (rev >= 1),                                          -- счётчик изменений пользователя
+  deleted       BOOL NOT NULL DEFAULT 0,                                                  -- надгробие DELETE
+  plain         TXT  NULL,
+  plain_source  TXT  NULL,
+  synced        TXT  NULL,
+  synced_format TXT  NULL,                                                                -- lrc|ttml
+  synced_source TXT  NULL,
+  start_time_ms BIG  NULL,
+  language      TXT  NULL,
+  created_at    TS   NOT NULL,
+  updated_at    TS   NOT NULL
+);
+CREATE UNIQUE INDEX lyrics_user_video ON lyrics (user_id, video_id);
+CREATE UNIQUE INDEX lyrics_user_rev   ON lyrics (user_id, rev);
+CREATE INDEX lyrics_video ON lyrics (video_id, updated_at);
 -- Kysely сам создаёт kysely_migration и kysely_migration_lock.
 ```
 

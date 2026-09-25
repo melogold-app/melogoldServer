@@ -313,3 +313,28 @@ CREATE TABLE play_forgets (
 ) STRICT;
 
 CREATE INDEX play_forgets_pull ON play_forgets (user_id, seq);
+
+-- ===== 0006_lyrics ===========================================================
+
+CREATE TABLE lyrics (
+  id            TEXT NOT NULL PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video_id      TEXT NOT NULL CHECK (length(video_id) = 11),
+  rev           INTEGER NOT NULL CHECK (rev >= 1),
+  deleted       INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0,1)),
+  plain         TEXT NULL,
+  plain_source  TEXT NULL,
+  synced        TEXT NULL,
+  synced_format TEXT NULL,
+  synced_source TEXT NULL,
+  start_time_ms INTEGER NULL,
+  language      TEXT NULL,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+) STRICT;
+
+CREATE UNIQUE INDEX lyrics_user_video ON lyrics (user_id, video_id);
+
+CREATE UNIQUE INDEX lyrics_user_rev ON lyrics (user_id, rev);
+
+CREATE INDEX lyrics_video ON lyrics (video_id, updated_at);

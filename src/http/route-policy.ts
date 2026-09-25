@@ -4,7 +4,7 @@
  * - **auth** (API §3 "Auth" column): `public`, `refresh` (token in the body), `pollSecret` (secret in the body) or
  *   `bearer`. Routes are **closed by default** (API §1.2): anything not listed here is `bearer`.
  * - **body limit** (API §1.9): `/sync` 4 MiB, `/sync/merge-plan` 1 MiB, `/playback/state` 128 KiB, `/auth/**`
- *   16 KiB, everything else 64 KiB.
+ *   16 KiB, `/lyrics/{videoId}` 1 MiB, everything else 64 KiB.
  * - **rate limits** (API §1.10) with their keys; a Bearer route without its own row gets `120/min user`.
  * - **`X-Sync-Protocol`** is required on `/sync`, `/sync/summary`, `/sync/merge-plan`, `/playback/state` (API §1.2).
  * - **storage**: `503 storage_full` while the disk is low, on registration, `PUT /playback/state` and `/sync` with
@@ -60,6 +60,7 @@ export const BODY_LIMITS = Object.freeze({
   mergePlan: 1 * MIB,
   playback: 128 * KIB,
   auth: 16 * KIB,
+  lyrics: 1 * MIB,
   default: 64 * KIB,
 });
 
@@ -126,12 +127,17 @@ export const ROUTE_TABLE: Readonly<Record<string, TableRow>> = Object.freeze({
   "GET /playback/state": { rateLimits: [device(60, MINUTE_MS)], syncProtocol: true },
   "PUT /playback/state": { rateLimits: [device(30, MINUTE_MS)], syncProtocol: true, storage: "always" },
   "DELETE /playback/state": { rateLimits: [user(10, MINUTE_MS)], syncProtocol: true },
+
+  "GET /lyrics/:videoId": {},
+  "PUT /lyrics/:videoId": { rateLimits: [user(60, MINUTE_MS)], storage: "always" },
+  "DELETE /lyrics/:videoId": { rateLimits: [user(60, MINUTE_MS)] },
+  "POST /auth/me/lyrics/changes": {},
 });
 
-/** `/auth/me/devices/:deviceId` → `/auth/me/devices/:`; `HEAD` is looked up as `GET`. */
+/** `/auth/me/devices/:deviceId` (or `{deviceId}`) → `/auth/me/devices/:`; `HEAD` is looked up as `GET`. */
 export function routeKey(method: string, url: string): string {
   const verb = method.toUpperCase() === "HEAD" ? "GET" : method.toUpperCase();
-  return `${verb} ${url.replace(/:[^/]+/g, ":")}`;
+  return `${verb} ${url.replace(/:[^/]+/g, ":").replace(/\{[^/]+\}/g, ":")}`;
 }
 
 const TABLE_BY_KEY: ReadonlyMap<string, TableRow> = new Map(
@@ -147,6 +153,7 @@ export function bodyLimitFor(url: string): number {
   if (url === "/sync/merge-plan") return BODY_LIMITS.mergePlan;
   if (url === "/playback/state") return BODY_LIMITS.playback;
   if (url === "/auth" || url.startsWith("/auth/")) return BODY_LIMITS.auth;
+  if (url.startsWith("/lyrics/")) return BODY_LIMITS.lyrics;
   return BODY_LIMITS.default;
 }
 

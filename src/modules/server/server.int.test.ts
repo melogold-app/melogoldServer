@@ -104,7 +104,7 @@ describe("GET /health and /health/live (API §4.2)", () => {
   });
 });
 
-/** `features` of `/server/info` with every module registered (M1–M2) and the default env. */
+/** `features` of `/server/info` with every module registered (M1–M2, lyrics) and the default env. */
 const ALL_FEATURES = {
   sync: syncFeature(SYNC_OP_KINDS),
   playback: FEATURE_V1,
@@ -112,6 +112,7 @@ const ALL_FEATURES = {
   recoveryCode: FEATURE_V1,
   export: FEATURE_V1,
   accountDeletion: FEATURE_V1,
+  lyrics: FEATURE_V1,
 };
 
 describe("GET /server/info (API §4.2)", () => {

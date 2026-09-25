@@ -152,6 +152,9 @@ const RULES: readonly Rule[] = [
   { id: "SyncResponse", direction: "response", matches: (j) => has(j, "results") },
   { id: "PlaybackPut", direction: "request", matches: (j) => has(j, "sessionId", "queueVersion", "playing") },
   { id: "PlaybackPutResult", direction: "response", matches: (j) => has(j, "applied") },
+  { id: "LyricsPut", direction: "request", matches: (j) => has(j, "syncedFormat") && !has(j, "videoId") },
+  { id: "LyricsResponse", direction: "response", matches: (j) => has(j, "mine", "shared") },
+  { id: "MyLyricsPage", direction: "response", matches: (j) => has(j, "items", "more") },
 ];
 
 /** Examples of API.md with an abbreviated value (`…`) that no schema can accept; the field is removed first. */
@@ -169,7 +172,7 @@ describe("API.md examples", () => {
   const all = examples();
 
   test("every example is mapped to a component", () => {
-    assert.equal(all.length, 26);
+    assert.equal(all.length, 29);
     const unmapped = all.filter((json) => !RULES.some((rule) => rule.matches(json)));
     assert.deepEqual(unmapped, []);
     const used = new Set(all.map((json) => RULES.find((rule) => rule.matches(json))?.id));

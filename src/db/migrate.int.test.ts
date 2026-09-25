@@ -369,16 +369,16 @@ describe(`schema check (${TEST_DIALECT})`, () => {
 
   test("database newer than the code: a warning, no migrations, unknown columns tolerated", async () => {
     await withMigratedDb(async (db) => {
-      await recordUnknownMigration(db, "0006_future");
+      await recordUnknownMigration(db, "0099_future");
       await sql`ALTER TABLE devices ADD COLUMN future_flag INTEGER NULL`.execute(db.kysely);
 
       const { log, warnings } = recordingLog();
       const result = await prepareDatabase(db, { log, migrateOnStart: true, schemaCheck: "strict" });
       assert.equal(result.migration.status, "schema_newer");
       assert.deepEqual(result.migration.state, {
-        applied: [...KNOWN, "0006_future"],
+        applied: [...KNOWN, "0099_future"],
         pending: [],
-        unknown: ["0006_future"],
+        unknown: ["0099_future"],
       });
       assert.deepEqual(result.schema, {
         ok: true,

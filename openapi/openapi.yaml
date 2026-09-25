@@ -33,6 +33,8 @@ tags:
     description: Library and history synchronization (API §4.7, §4.8).
   - name: playback
     description: Continue playback on another device (API §4.9).
+  - name: lyrics
+    description: The user's lyrics and the shared ones (API §4.10).
 paths:
   /health:
     get:
@@ -2511,6 +2513,273 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /lyrics/{videoId}:
+    get:
+      operationId: getLyrics
+      summary: The caller's lyrics of a track and the shared version
+      tags:
+        - lyrics
+      description: >-
+        `shared` prefers synced lyrics, then the most recent; its author is not
+        disclosed (API §4.10).
+
+
+        Rate limit: 120/min per user (API §1.10).
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{11}$
+          in: path
+          name: videoId
+          required: true
+          description: Any YouTube video id (API §1.6).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LyricsResponse"
+        "400":
+          description: "`invalid_request` (issues)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: putLyrics
+      summary: Save the caller's lyrics of a track
+      tags:
+        - lyrics
+      description: >-
+        Creates or replaces the version; unchanged content keeps `rev` and sends
+        no event. Otherwise `rev` grows and `lyrics.changed` goes to the other
+        devices (API §4.10).
+
+
+        Rate limit: 60/min per user (API §1.10).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LyricsPut"
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{11}$
+          in: path
+          name: videoId
+          required: true
+          description: Any YouTube video id (API §1.6).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyLyrics"
+        "400":
+          description: "`invalid_request` (issues), `invalid_json`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "`payload_too_large`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: "`unsupported_media_type`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?), `storage_full` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteLyrics
+      summary: Delete the caller's lyrics of a track
+      tags:
+        - lyrics
+      description: >-
+        Writes a tombstone, then `lyrics.changed`; nothing when there is no live
+        version (API §4.10).
+
+
+        Rate limit: 60/min per user (API §1.10).
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{11}$
+          in: path
+          name: videoId
+          required: true
+          description: Any YouTube video id (API §1.6).
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: "`invalid_request` (issues)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/me/lyrics/changes:
+    post:
+      operationId: listMyLyricsChanges
+      summary: The caller's lyrics changed after a revision
+      tags:
+        - lyrics
+      description: >-
+        Ascending `rev`; the first load (`after: 0`) leaves tombstones out (API
+        §4.10).
+
+
+        Rate limit: 120/min per user (API §1.10).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LyricsChangesRequest"
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyLyricsPage"
+        "400":
+          description: "`invalid_request` (issues), `invalid_json`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "`payload_too_large`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: "`unsupported_media_type`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -3608,8 +3877,8 @@ components:
         type:
           type: string
           description: "Known values: system.connected, sync.changed, playback.updated,
-            devices.updated, session.invalidated, account.updated, link.updated.
-            Clients must accept unknown values (API §1.3)."
+            devices.updated, session.invalidated, account.updated, link.updated,
+            lyrics.changed. Clients must accept unknown values (API §1.3)."
         at:
           type: string
           format: date-time
@@ -3689,6 +3958,156 @@ components:
       required:
         - refreshToken
       description: Always answers 204 (API §4.3).
+    LyricsChangedPayload:
+      type: object
+      properties:
+        videoId:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{11}$
+          description: YouTube video id.
+        rev:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+      required:
+        - videoId
+        - rev
+      description: "lyrics.changed: every device except the author, after PUT/DELETE
+        /lyrics/{videoId}; coalesced for 2 s."
+    LyricsChangesRequest:
+      type: object
+      properties:
+        after:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+        limit:
+          description: Default 100.
+          nullable: true
+          type: integer
+          minimum: 1
+          maximum: 200
+          format: int32
+      required:
+        - after
+    LyricsPut:
+      type: object
+      properties:
+        plain:
+          nullable: true
+          type: string
+          minLength: 1
+          maxLength: 50000
+        plainSource:
+          nullable: true
+          type: string
+          enum:
+            - user
+            - file
+            - youtube_music
+            - lrclib
+            - kugou
+        synced:
+          nullable: true
+          type: string
+          minLength: 1
+          maxLength: 200000
+        syncedFormat:
+          nullable: true
+          type: string
+          enum:
+            - lrc
+            - ttml
+        syncedSource:
+          nullable: true
+          type: string
+          enum:
+            - user
+            - file
+            - youtube_music
+            - lrclib
+            - kugou
+        startTimeMs:
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 86400000
+          format: int32
+        language:
+          nullable: true
+          type: string
+          minLength: 1
+          maxLength: 35
+    LyricsResponse:
+      type: object
+      properties:
+        mine:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/MyLyrics"
+        shared:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/SharedLyrics"
+        serverTime:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$
+          description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
+      required:
+        - mine
+        - shared
+        - serverTime
+    LyricsText:
+      type: object
+      properties:
+        plain:
+          nullable: true
+          type: string
+          maxLength: 50000
+        plainSource:
+          nullable: true
+          type: string
+          description: "Known values: user, file, youtube_music, lrclib, kugou. Clients
+            must accept unknown values (API §1.3)."
+        synced:
+          nullable: true
+          type: string
+          maxLength: 200000
+        syncedFormat:
+          nullable: true
+          type: string
+          description: "Present together with `synced`. Known values: lrc, ttml. Clients
+            must accept unknown values (API §1.3)."
+        syncedSource:
+          nullable: true
+          type: string
+          description: "Known values: user, file, youtube_music, lrclib, kugou. Clients
+            must accept unknown values (API §1.3)."
+        startTimeMs:
+          nullable: true
+          description: Where the synced lyrics start in the track.
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+        language:
+          nullable: true
+          description: BCP 47.
+          type: string
+          maxLength: 35
+      required:
+        - plain
+        - plainSource
+        - synced
+        - syncedFormat
+        - syncedSource
+        - startTimeMs
+        - language
     MeResponse:
       type: object
       properties:
@@ -3774,6 +4193,63 @@ components:
           description: In the order of the request.
       required:
         - plan
+    MyLyrics:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          description: UUID, lowercase.
+        videoId:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{11}$
+          description: YouTube video id.
+        rev:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+          description: "The user's change counter: grows with every PUT and DELETE."
+        deleted:
+          type: boolean
+          description: Tombstone of DELETE; `text` is null then.
+        text:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/LyricsText"
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$
+          description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
+      required:
+        - id
+        - videoId
+        - rev
+        - deleted
+        - text
+        - updatedAt
+    MyLyricsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyLyrics"
+          description: "`rev > after`, ascending."
+        rev:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+          description: "`after` of the next request."
+        more:
+          type: boolean
+      required:
+        - items
+        - rev
+        - more
     OpResult:
       type: object
       properties:
@@ -4590,6 +5066,10 @@ components:
           description: Present while proof of work is required.
           allOf:
             - $ref: "#/components/schemas/FeatureVersion"
+        lyrics:
+          description: Lyrics of the user and shared ones (API §4.10).
+          allOf:
+            - $ref: "#/components/schemas/FeatureVersion"
       description: An absent key means the feature is not supported (API §1.3).
     ServerInfo:
       type: object
@@ -4705,6 +5185,30 @@ components:
         - reason
         - forceRelogin
       description: "session.invalidated: addressed, before the streams close."
+    SharedLyrics:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          description: UUID, lowercase.
+        videoId:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{11}$
+          description: YouTube video id.
+        text:
+          $ref: "#/components/schemas/LyricsText"
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$
+          description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
+      required:
+        - id
+        - videoId
+        - text
+        - updatedAt
+      description: Another user's version; the author is not disclosed.
     SyncChangedPayload:
       type: object
       properties:

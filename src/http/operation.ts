@@ -33,6 +33,7 @@ export const OPENAPI_TAGS = Object.freeze([
   { name: "live", description: "Server-sent events (API §6)." },
   { name: "sync", description: "Library and history synchronization (API §4.7, §4.8)." },
   { name: "playback", description: "Continue playback on another device (API §4.9)." },
+  { name: "lyrics", description: "The user's lyrics and the shared ones (API §4.10)." },
 ] as const);
 
 export type OpenapiTag = (typeof OPENAPI_TAGS)[number]["name"];

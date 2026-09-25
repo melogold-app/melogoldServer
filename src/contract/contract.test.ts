@@ -316,7 +316,7 @@ describe("contract components (API §1.1, §4, §6, §11)", () => {
     for (const name of ["TrackDto", "ServerInfo", "SyncOp", "LinkPollResponse", "ServerLimits", "ErrorResponse"]) {
       assert.ok(API_OBJECTS.has(name), name);
     }
-    assert.equal([...API_OBJECTS.keys()].filter((name) => name.endsWith("Payload")).length, 7);
+    assert.equal([...API_OBJECTS.keys()].filter((name) => name.endsWith("Payload")).length, 8);
   });
 
   test("every component once; components = API types + named inline objects", () => {

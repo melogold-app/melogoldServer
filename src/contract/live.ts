@@ -6,7 +6,7 @@
  * The event catalog (type → payload, who receives it) is `src/modules/live/live.events.ts`.
  */
 import { z } from "zod";
-import { CursorOut, enumOut, Int32Out, IntOut, IsoOut, TrackDto, UuidOut } from "./common.ts";
+import { CursorOut, enumOut, Int32Out, IntOut, IsoOut, TrackDto, UuidOut, VideoIdOut } from "./common.ts";
 import { PlaybackHandoff } from "./playback.ts";
 
 export const LIVE_EVENT_TYPES = [
@@ -17,6 +17,7 @@ export const LIVE_EVENT_TYPES = [
   "session.invalidated",
   "account.updated",
   "link.updated",
+  "lyrics.changed",
 ] as const;
 export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number];
 
@@ -127,6 +128,11 @@ export const LinkUpdatedPayload = z
   })
   .meta({ id: "LinkUpdatedPayload", description: "link.updated: the approving device, on the other side's action." });
 
+export const LyricsChangedPayload = z.object({ videoId: VideoIdOut, rev: IntOut }).meta({
+  id: "LyricsChangedPayload",
+  description: "lyrics.changed: every device except the author, after PUT/DELETE /lyrics/{videoId}; coalesced for 2 s.",
+});
+
 /** API §6 table: the payload schema of each event type. */
 export const LIVE_EVENT_PAYLOADS = Object.freeze({
   "system.connected": SystemConnectedPayload,
@@ -136,6 +142,7 @@ export const LIVE_EVENT_PAYLOADS = Object.freeze({
   "session.invalidated": SessionInvalidatedPayload,
   "account.updated": AccountUpdatedPayload,
   "link.updated": LinkUpdatedPayload,
+  "lyrics.changed": LyricsChangedPayload,
 } satisfies Record<LiveEventType, z.ZodType>);
 
 /** The payload type of an event type. */

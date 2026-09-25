@@ -11,6 +11,7 @@
  * | `session.invalidated` | one device (addressed)                 | —                            |
  * | `account.updated`     | every device of the user but the author | —                            |
  * | `link.updated`        | the approving device (addressed)       | —                            |
+ * | `lyrics.changed`      | every device of the user but the author | 2 s (API §6)                 |
  *
  * Wire format (API §6): the first frame of a stream is `retry: 5000`, every event is
  * `id: <uuid>\ndata: <LiveEvent JSON>\n\n` **without** an `event:` line, heartbeats are comments. Events are published
@@ -66,6 +67,11 @@ export const LIVE_EVENTS: Readonly<Record<LiveEventType, LiveEventSpec>> = Objec
   },
   "account.updated": { payload: LIVE_EVENT_PAYLOADS["account.updated"], audience: "others", coalesceMs: null },
   "link.updated": { payload: LIVE_EVENT_PAYLOADS["link.updated"], audience: "device", coalesceMs: null },
+  "lyrics.changed": {
+    payload: LIVE_EVENT_PAYLOADS["lyrics.changed"],
+    audience: "others",
+    coalesceMs: SYNC_CHANGED_COALESCE_MS,
+  },
 });
 
 export function isLiveEventType(value: unknown): value is LiveEventType {

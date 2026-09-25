@@ -78,12 +78,22 @@ import {
   DevicesUpdatedPayload,
   LinkUpdatedPayload,
   LiveEvent,
+  LyricsChangedPayload,
   PlaybackSummary,
   PlaybackUpdatedPayload,
   SessionInvalidatedPayload,
   SyncChangedPayload,
   SystemConnectedPayload,
 } from "./live.ts";
+import {
+  LyricsChangesRequest,
+  LyricsPut,
+  LyricsResponse,
+  LyricsText,
+  MyLyrics,
+  MyLyricsPage,
+  SharedLyrics,
+} from "./lyrics.ts";
 import {
   PlaybackHandoff,
   PlaybackHandoffInput,
@@ -139,6 +149,7 @@ export * from "./devices.ts";
 export * from "./limits.ts";
 export * from "./linking.ts";
 export * from "./live.ts";
+export * from "./lyrics.ts";
 export * from "./playback.ts";
 export * from "./server.ts";
 export * from "./sync.ts";
@@ -182,6 +193,8 @@ const REQUEST_SCHEMAS: readonly z.ZodType[] = [
   BaselineEntry,
   PlaybackPut,
   PlaybackHandoffInput,
+  LyricsPut,
+  LyricsChangesRequest,
 ];
 
 /** Bodies the server sends (including errors and SSE events) and the objects inside them. */
@@ -259,6 +272,12 @@ const RESPONSE_SCHEMAS: readonly z.ZodType[] = [
   DeviceRef,
   AccountUpdatedPayload,
   LinkUpdatedPayload,
+  LyricsChangedPayload,
+  LyricsText,
+  MyLyrics,
+  SharedLyrics,
+  LyricsResponse,
+  MyLyricsPage,
 ];
 
 /**
