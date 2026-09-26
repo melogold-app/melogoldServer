@@ -12,6 +12,8 @@ import { EnvError, loadEnv } from "../config/env.ts";
 import type { Env } from "../config/env.ts";
 import { CliError, EXIT_FAILURE, EXIT_OK, EXIT_USAGE, UsageError, stderrLogger, stdio } from "./io.ts";
 import type { CliOutput } from "./io.ts";
+import { terminalPrompter } from "./password.ts";
+import type { Prompter } from "./password.ts";
 import type { OpenRuntimeOptions } from "./runtime.ts";
 
 export { EXIT_FAILURE, EXIT_OK, EXIT_USAGE } from "./io.ts";
@@ -81,7 +83,64 @@ function required(value: string | undefined, what: string): string {
   return value;
 }
 
-type Run = (env: Env, output: CliOutput, runtime: OpenRuntimeOptions) => Promise<number>;
+type Run = (env: Env, output: CliOutput, runtime: OpenRuntimeOptions, prompter: Prompter) => Promise<number>;
+
+/** `user <sub> …`. */
+function resolveUser(sub: string | undefined, args: readonly string[]): Readonly<{ run: Run; verbose: boolean }> {
+  const user = () => import("./user.ts");
+  switch (sub) {
+    case "add":
+    case "reset-password": {
+      const parsed = parse(args, { "generate-password": { type: "boolean" } }, 1);
+      const input = { login: required(parsed.positionals[0], "login"), generate: parsed.flag("generate-password") };
+      return {
+        verbose: parsed.flag("verbose"),
+        run: async (env, output, runtime, prompter) =>
+          sub === "add"
+            ? (await user()).userAddCommand(env, output, runtime, prompter, input)
+            : (await user()).userResetPasswordCommand(env, output, runtime, prompter, input),
+      };
+    }
+    case "delete": {
+      const parsed = parse(args, { yes: { type: "boolean" } }, 1);
+      const input = { login: required(parsed.positionals[0], "login"), yes: parsed.flag("yes") };
+      return {
+        verbose: parsed.flag("verbose"),
+        run: async (env, output, runtime, prompter) =>
+          (await user()).userDeleteCommand(env, output, runtime, prompter, input),
+      };
+    }
+    case "list": {
+      const parsed = parse(args, { usage: { type: "boolean" }, json: { type: "boolean" } }, 0);
+      const input = { usage: parsed.flag("usage"), json: parsed.flag("json") };
+      return {
+        verbose: parsed.flag("verbose"),
+        run: async (env, output, runtime) => (await user()).userListCommand(env, output, runtime, input),
+      };
+    }
+    case "devices": {
+      const parsed = parse(args, { json: { type: "boolean" } }, 1);
+      const input = { login: required(parsed.positionals[0], "login"), json: parsed.flag("json") };
+      return {
+        verbose: parsed.flag("verbose"),
+        run: async (env, output, runtime) => (await user()).userDevicesCommand(env, output, runtime, input),
+      };
+    }
+    case "revoke-device": {
+      const parsed = parse(args, {}, 2);
+      const input = {
+        login: required(parsed.positionals[0], "login"),
+        deviceId: required(parsed.positionals[1], "device id"),
+      };
+      return {
+        verbose: parsed.flag("verbose"),
+        run: async (env, output, runtime) => (await user()).userRevokeDeviceCommand(env, output, runtime, input),
+      };
+    }
+    default:
+      throw new UsageError("usage: melogold user add|reset-password|delete|list|devices|revoke-device …");
+  }
+}
 
 /** Resolves the command words to a runner; throws `UsageError` for anything unknown. */
 function resolve(argv: readonly string[]): Readonly<{ run: Run; verbose: boolean }> {
@@ -151,6 +210,8 @@ function resolve(argv: readonly string[]): Readonly<{ run: Run; verbose: boolean
         run: async (env, output) => (await import("./basic.ts")).secretRotateCommand(env, output),
       };
     }
+    case "user":
+      return resolveUser(sub, rest);
     default:
       throw new UsageError(`unknown command "${argv.join(" ")}"`);
   }
@@ -159,6 +220,8 @@ function resolve(argv: readonly string[]): Readonly<{ run: Run; verbose: boolean
 export type RunCliOptions = Readonly<{
   /** The parsed environment (tests); default: `loadEnv()` of the process. */
   env?: Env;
+  /** Where passwords and confirmations are read (tests); default: the terminal. */
+  prompter?: Prompter;
 }>;
 
 /** Runs one CLI command and returns the exit code. */
@@ -181,7 +244,8 @@ export async function runCli(
     }
     const resolved = resolve(argv);
     env = options.env ?? loadEnv();
-    return await resolved.run(env, output, { log: stderrLogger(output, resolved.verbose) });
+    const prompter = options.prompter ?? terminalPrompter(output);
+    return await resolved.run(env, output, { log: stderrLogger(output, resolved.verbose) }, prompter);
   } catch (error) {
     if (error instanceof UsageError) {
       output.err(`melogold: ${error.message}\n\n${usage()}`);

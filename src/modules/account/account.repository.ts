@@ -216,6 +216,141 @@ export async function deleteLinksAndPlayback(q: Queryable, userId: string): Prom
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// administration (the CLI: `melogold user …`, PLAN T3.1)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** An account as the administrator sees it. */
+export type AdminAccountRow = Readonly<{
+  id: string;
+  login: string;
+  created_at: number;
+  created_by: string;
+  password_changed_at: number;
+}>;
+
+/** The active account with this (normalized) login. */
+export async function findActiveUserByLogin(q: Queryable, login: string): Promise<AdminAccountRow | undefined> {
+  return q
+    .selectFrom("users")
+    .select(["id", "login", "created_at", "created_by", "password_changed_at"])
+    .where("login", "=", login)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
+/**
+ * `melogold user reset-password`: new hash and recovery code (unconfirmed), `auth_version + 1`, whatever the old
+ * code was.
+ * @returns whether the account was updated (`false`: deleted meanwhile).
+ */
+export async function adminResetCredentials(
+  q: Queryable,
+  input: Readonly<{ userId: string; passwordHash: string; recoveryCodeHash: string; now: number }>,
+): Promise<boolean> {
+  const result = await q
+    .updateTable("users")
+    .set((eb) => ({
+      password_hash: input.passwordHash,
+      auth_version: eb("auth_version", "+", 1),
+      password_changed_at: input.now,
+      recovery_code_hash: input.recoveryCodeHash,
+      recovery_code_created_at: input.now,
+      recovery_code_confirmed_at: null,
+      updated_at: input.now,
+    }))
+    .where("id", "=", input.userId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+  return result.numUpdatedRows === 1n;
+}
+
+/** Every active account with its device count and the last time one of its devices was seen, by login. */
+export async function listActiveUsers(
+  q: Queryable,
+): Promise<(AdminAccountRow & Readonly<{ devices: number; last_seen_at: number | null }>)[]> {
+  const rows = await q
+    .selectFrom("users")
+    .leftJoin("devices", "devices.user_id", "users.id")
+    .select((eb) => [
+      "users.id",
+      "users.login",
+      "users.created_at",
+      "users.created_by",
+      "users.password_changed_at",
+      eb.fn.count<number | string>("devices.id").as("devices"),
+      eb.fn.max<number | string | null>("devices.last_seen_at").as("last_seen_at"),
+    ])
+    .where("users.deleted_at", "is", null)
+    .groupBy(["users.id", "users.login", "users.created_at", "users.created_by", "users.password_changed_at"])
+    .orderBy("users.login")
+    .execute();
+  return rows.map((row) => ({
+    ...row,
+    devices: Number(row.devices),
+    last_seen_at: row.last_seen_at === null ? null : Number(row.last_seen_at),
+  }));
+}
+
+export type AccountUsage = Readonly<{
+  likes: number;
+  bookmarks: number;
+  playlists: number;
+  playlistItems: number;
+  historyPlays: number;
+  lyrics: number;
+}>;
+
+/** What the account keeps on the server (`melogold user list --usage`): live rows only, no tombstones. */
+export async function countUsage(q: Queryable, userId: string): Promise<AccountUsage> {
+  const count = async (query: { executeTakeFirstOrThrow(): Promise<{ count: number | string }> }) =>
+    Number((await query.executeTakeFirstOrThrow()).count);
+  return Object.freeze({
+    likes: await count(
+      q
+        .selectFrom("sync_likes")
+        .select((eb) => eb.fn.countAll<number | string>().as("count"))
+        .where("user_id", "=", userId)
+        .where("liked", "=", 1),
+    ),
+    bookmarks: await count(
+      q
+        .selectFrom("sync_bookmarks")
+        .select((eb) => eb.fn.countAll<number | string>().as("count"))
+        .where("user_id", "=", userId)
+        .where("bookmarked", "=", 1),
+    ),
+    playlists: await count(
+      q
+        .selectFrom("sync_playlists")
+        .select((eb) => eb.fn.countAll<number | string>().as("count"))
+        .where("user_id", "=", userId)
+        .where("deleted", "=", 0),
+    ),
+    playlistItems: await count(
+      q
+        .selectFrom("sync_playlist_items")
+        .select((eb) => eb.fn.countAll<number | string>().as("count"))
+        .where("user_id", "=", userId)
+        .where("present", "=", 1),
+    ),
+    historyPlays: await count(
+      q
+        .selectFrom("play_events")
+        .select((eb) => eb.fn.countAll<number | string>().as("count"))
+        .where("user_id", "=", userId)
+        .where("in_history", "=", 1),
+    ),
+    lyrics: await count(
+      q
+        .selectFrom("lyrics")
+        .select((eb) => eb.fn.countAll<number | string>().as("count"))
+        .where("user_id", "=", userId)
+        .where("deleted", "=", 0),
+    ),
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // devices
 // ---------------------------------------------------------------------------------------------------------------------
 
