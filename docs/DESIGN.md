@@ -704,7 +704,7 @@ Ready ─триггер─▶ Syncing ─ok─▶ Ready; сеть/5xx ─▶ Bac
 **Защита:**
 1. **Бэкап сам несёт флаг.**
    - Копия SQLite после `VACUUM INTO` получает `server_meta.restore_pending='1'`.
-   - Дамп PG делается в plain-формате, и в его конец дописывается `INSERT INTO server_meta … ('restore_pending','1') ON CONFLICT … DO UPDATE`.
+   - Дамп PG делается в plain-формате, и в его конец дописывается `INSERT INTO public.server_meta … ('restore_pending','1') ON CONFLICT … DO UPDATE` (со схемой: plain-дамп в начале ставит пустой `search_path`).
 
    Любое восстановление из такого бэкапа, даже ручное, ставит флаг.
 2. **Старт сервера при `restore_pending='1'`:**
@@ -1410,7 +1410,7 @@ Watchtower и автообновление по умолчанию не пред
 **PostgreSQL:**
 ```
 compose exec -T postgres pg_dump -U melogold -d melogold --format=plain --no-owner --no-privileges </dev/null
-  | { cat; printf '\nINSERT INTO server_meta (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = excluded.value;\n' "'restore_pending'" "'1'"; }
+  | { cat; printf '\nINSERT INTO public.server_meta (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = excluded.value;\n' "'restore_pending'" "'1'"; }
   > .partial/db.sql
 ```
 

@@ -155,7 +155,7 @@ cmd_backup() {
 		compose exec -T postgres pg_dump -U melogold -d melogold --format=plain --no-owner --no-privileges </dev/null |
 			{
 				cat
-				printf "\nINSERT INTO server_meta (key, value) VALUES ('restore_pending', '1') ON CONFLICT (key) DO UPDATE SET value = excluded.value;\n"
+				printf "\nINSERT INTO public.server_meta (key, value) VALUES ('restore_pending', '1') ON CONFLICT (key) DO UPDATE SET value = excluded.value;\n"
 			} >"$backup_work/$backup_file" || {
 			rm -rf "$backup_work"
 			die "pg_dump failed"

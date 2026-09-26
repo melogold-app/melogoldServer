@@ -133,7 +133,7 @@ app_run() { compose run --rm --no-deps -T app "$@"; }
 
 # A random [A-Za-z0-9] string of $1 characters from /dev/urandom.
 random_token() {
-	LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | dd bs=1 count="$1" 2>/dev/null
+	LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | dd bs=1 count="$1" 2>/dev/null
 }
 
 now_utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
