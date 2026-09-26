@@ -83,7 +83,7 @@ function required(value: string | undefined, what: string): string {
   return value;
 }
 
-type Io = Readonly<{ prompter: Prompter; stdin: NodeJS.ReadableStream }>;
+type Io = Readonly<{ prompter: Prompter; stdin: NodeJS.ReadableStream; releasePublicKey: string | undefined }>;
 
 type Run = (env: Env, output: CliOutput, runtime: OpenRuntimeOptions, io: Io) => Promise<number>;
 
@@ -214,6 +214,24 @@ function resolve(argv: readonly string[]): Readonly<{ run: Run; verbose: boolean
     }
     case "user":
       return resolveUser(sub, rest);
+    case "verify-release": {
+      const args = plain(words(1), {}, Number.MAX_SAFE_INTEGER);
+      const [sums, signature, ...files] = args.positionals;
+      const input = {
+        sums: required(sums, "SHA256SUMS"),
+        signature: required(signature, "SHA256SUMS.minisig"),
+        files,
+      };
+      return {
+        verbose: false,
+        run: async (_env, output, _runtime, io) =>
+          (await import("./basic.ts")).verifyReleaseCommand(output, {
+            ...input,
+            publicKey:
+              io.releasePublicKey ?? (await import("../modules/maintenance/verify-release.ts")).RELEASE_PUBLIC_KEY,
+          }),
+      };
+    }
     case "backup": {
       const args = plain(words(1), { out: { type: "string" } }, 0);
       const out = required(args.value("out"), "--out <file|->");
@@ -274,6 +292,8 @@ export type RunCliOptions = Readonly<{
   prompter?: Prompter;
   /** What `--from -` reads (tests); default: the process's stdin. */
   stdin?: NodeJS.ReadableStream;
+  /** The release key `verify-release` trusts (tests); default: the one compiled into the image. */
+  releasePublicKey?: string;
 }>;
 
 /** Runs one CLI command and returns the exit code. */
@@ -296,7 +316,11 @@ export async function runCli(
     }
     const resolved = resolve(argv);
     env = options.env ?? loadEnv();
-    const io = { prompter: options.prompter ?? terminalPrompter(output), stdin: options.stdin ?? process.stdin };
+    const io = {
+      prompter: options.prompter ?? terminalPrompter(output),
+      stdin: options.stdin ?? process.stdin,
+      releasePublicKey: options.releasePublicKey,
+    };
     return await resolved.run(env, output, { log: stderrLogger(output, resolved.verbose) }, io);
   } catch (error) {
     if (error instanceof UsageError) {

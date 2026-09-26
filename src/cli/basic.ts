@@ -3,6 +3,7 @@
  * `qr [url]`, `jobs run <name>`, `secret rotate`.
  */
 import { accessSync, constants, readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Env } from "../config/env.ts";
 import { deriveSubkeys, keyFingerprint, loadMasterKey, rotateKeyFile } from "../config/secret-key.ts";
@@ -13,6 +14,12 @@ import { serverJobs } from "../jobs/index.ts";
 import { DAY_MS } from "../lib/clock.ts";
 import { readServerStatus } from "../modules/maintenance/status.ts";
 import type { ServerStatus } from "../modules/maintenance/status.ts";
+import {
+  ReleaseSignatureError,
+  parseChecksums,
+  verifyChecksums,
+  verifyMinisign,
+} from "../modules/maintenance/verify-release.ts";
 import { CliError, EXIT_FAILURE, EXIT_OK, UsageError } from "./io.ts";
 import type { CliOutput } from "./io.ts";
 import { qrLines } from "./qr.ts";
@@ -224,4 +231,32 @@ export function secretRotateCommand(env: Env, output: CliOutput): number {
       "restart the server to use it: every device will have to sign in again\n",
   );
   return EXIT_OK;
+}
+
+/**
+ * `verify-release <SHA256SUMS> <SHA256SUMS.minisig> [file…]`: the release signature against the key compiled into this
+ * image (DESIGN §7.5 step 2, m25), then each named file against its `SHA256SUMS` line.
+ */
+export function verifyReleaseCommand(
+  output: CliOutput,
+  input: Readonly<{ sums: string; signature: string; files: readonly string[]; publicKey: string | null }>,
+): number {
+  if (input.publicKey === null) {
+    throw new CliError("this image carries no release key, so it cannot check release signatures");
+  }
+  try {
+    const sums = readFileSync(input.sums);
+    const comment = verifyMinisign(input.publicKey, readFileSync(input.signature, "utf8"), sums);
+    output.out(`signature ok: ${comment}\n`);
+    verifyChecksums(
+      parseChecksums(sums.toString("utf8")),
+      input.files.map((file) => ({ name: basename(file), bytes: readFileSync(file) })),
+    );
+    for (const file of input.files) output.out(`ok ${basename(file)}\n`);
+    return EXIT_OK;
+  } catch (error) {
+    if (error instanceof ReleaseSignatureError) throw new CliError(error.message);
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") throw new CliError(error.message);
+    throw error;
+  }
 }
