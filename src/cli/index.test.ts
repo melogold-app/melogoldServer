@@ -6,26 +6,34 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { captureOutput } from "../test/cli-output.ts";
 import { EXIT_USAGE, runCli } from "./index.ts";
-
-function capture() {
-  const out: string[] = [];
-  const err: string[] = [];
-  return { out, err, output: { out: (text: string) => out.push(text), err: (text: string) => err.push(text) } };
-}
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 describe("CLI", () => {
   test("help and usage errors", async () => {
-    const help = capture();
+    const help = captureOutput();
     assert.equal(await runCli(["help"], help.output), 0);
-    assert.match(help.out.join(""), /Usage: melogold <command>/);
-    assert.match(help.out.join(""), /sync rotate-epoch/);
+    assert.match(help.stdout(), /Usage: melogold <command>/);
+    assert.match(help.stdout(), /sync rotate-epoch/);
+    assert.match(help.stdout(), /user add <login>/);
 
-    const unknown = capture();
-    assert.equal(await runCli(["user", "add", "maxim"], unknown.output), EXIT_USAGE);
-    assert.match(unknown.err.join(""), /"user add maxim" is not available/);
+    const unknown = captureOutput();
+    assert.equal(await runCli(["frobnicate", "now"], unknown.output), EXIT_USAGE);
+    assert.match(unknown.stderr(), /unknown command "frobnicate now"/);
+
+    const badFlag = captureOutput();
+    assert.equal(await runCli(["info", "--jsn"], badFlag.output), EXIT_USAGE);
+    assert.match(badFlag.stderr(), /--jsn/);
+
+    const extra = captureOutput();
+    assert.equal(await runCli(["migrate", "now"], extra.output), EXIT_USAGE);
+    assert.match(extra.stderr(), /unexpected argument "now"/);
+
+    const noJob = captureOutput();
+    assert.equal(await runCli(["jobs", "run"], noJob.output), EXIT_USAGE);
+    assert.match(noJob.stderr(), /missing job name/);
   });
 
   test("main() runs the CLI without loading fastify", () => {

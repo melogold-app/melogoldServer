@@ -98,3 +98,25 @@ export async function checkpointSqlite(q: Queryable): Promise<boolean> {
   const result = await sql<{ busy: number }>`PRAGMA wal_checkpoint(TRUNCATE)`.execute(q);
   return (result.rows[0]?.busy ?? 0) !== 0;
 }
+
+/** Accounts on the server: active, and deleted but not purged yet (`deleted_at` set). */
+export async function countUsers(q: Queryable): Promise<Readonly<{ active: number; deleted: number }>> {
+  const count = async (deleted: boolean) => {
+    const row = await q
+      .selectFrom("users")
+      .select((eb) => eb.fn.countAll<number | string>().as("count"))
+      .where("deleted_at", deleted ? "is not" : "is", null)
+      .executeTakeFirstOrThrow();
+    return Number(row.count);
+  };
+  return Object.freeze({ active: await count(false), deleted: await count(true) });
+}
+
+/** Devices of every account. */
+export async function countDevices(q: Queryable): Promise<number> {
+  const row = await q
+    .selectFrom("devices")
+    .select((eb) => eb.fn.countAll<number | string>().as("count"))
+    .executeTakeFirstOrThrow();
+  return Number(row.count);
+}

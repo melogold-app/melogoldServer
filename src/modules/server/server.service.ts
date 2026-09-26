@@ -106,6 +106,19 @@ export async function applyPendingRestore(
   return Object.freeze({ rotatedUsers, graceUntil });
 }
 
+/** Whether a restored database still waits for its epoch rotation (`server_meta.restore_pending = '1'`). */
+export async function isRestorePending(db: Pick<Db, "read">): Promise<boolean> {
+  return (await db.read((q) => readMeta(q, META_RESTORE_PENDING))) === "1";
+}
+
+/**
+ * Marks the database as restored (`restore_pending = '1'`): the next start rotates every user's epoch (DESIGN §3.15
+ * item 4, `melogold sync rotate-epoch --all` after a snapshot rollback).
+ */
+export async function markRestorePending(db: Pick<Db, "write">): Promise<void> {
+  await db.write((q) => upsertMeta(q, META_RESTORE_PENDING, "1"));
+}
+
 function unavailable(): AppError<"unavailable"> {
   return new AppError("unavailable", { details: { retryAfterSeconds: HEALTH_RETRY_AFTER_SECONDS } });
 }

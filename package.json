@@ -46,6 +46,7 @@
     "fastify-type-provider-zod": "^7.0.0",
     "kysely": "~0.29.6",
     "pg": "^8.23.0",
+    "qrcode-generator": "^2.0.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
