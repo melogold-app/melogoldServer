@@ -24,28 +24,29 @@ fail() {
 }
 setting() { sed -n "s/^$1='\\(.*\\)'\$/\\1/p" "$DIR/.env"; }
 
+BODY=$(mktemp)
+
+# api METHOD PATH JSON [TOKEN]: the body goes to $BODY, the status to $API_STATUS (call it directly, not in $(…)).
 api() {
-	# api METHOD PATH JSON [TOKEN] → body on stdout, status in $API_STATUS
-	api_out=$(mktemp)
-	API_STATUS=$(curl -s -o "$api_out" -w '%{http_code}' -X "$1" "$URL$2" -H 'content-type: application/json' \
+	API_STATUS=$(curl -s -o "$BODY" -w '%{http_code}' -X "$1" "$URL$2" -H 'content-type: application/json' \
 		-H 'x-sync-protocol: 1' ${4:+-H "authorization: Bearer $4"} --data "$3")
-	cat "$api_out"
-	rm -f "$api_out"
 }
 
-LIKES=0
+COUNTER=$(mktemp)
+echo 0 >"$COUNTER"
 like() {
-	# like TOKEN CURSOR → the new cursor
-	LIKES=$((LIKES + 1))
-	like_body=$(api POST /sync "{\"cursor\":\"$2\",\"ops\":[{\"opId\":\"$(cat /proc/sys/kernel/random/uuid)\",\"kind\":\"like.set\",\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"videoId\":\"e2e$(printf '%08d' "$LIKES")\",\"liked\":true}]}" "$1")
-	[ "$API_STATUS" = 200 ] || fail "sync answered $API_STATUS: $like_body"
-	printf '%s' "$like_body" | jq -r .cursor
+	# like TOKEN CURSOR → the new cursor; a new track each time (the counter is a file: like runs in $(…))
+	LIKES=$(($(cat "$COUNTER") + 1))
+	echo "$LIKES" >"$COUNTER"
+	api POST /sync "{\"cursor\":\"$2\",\"ops\":[{\"opId\":\"$(cat /proc/sys/kernel/random/uuid)\",\"kind\":\"like.set\",\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"videoId\":\"e2e$(printf '%08d' "$LIKES")\",\"liked\":true}]}" "$1"
+	[ "$API_STATUS" = 200 ] || fail "sync answered $API_STATUS: $(cat "$BODY")"
+	jq -r .cursor "$BODY"
 }
 
 login() {
-	login_body=$(api POST /auth/login "{\"login\":\"owner1\",\"password\":\"$PASSWORD\",\"device\":{\"hwid\":\"$(printf '%064d' 7)\",\"name\":\"e2e\",\"platform\":\"linux\"}}")
-	[ "$API_STATUS" = 200 ] || fail "login answered $API_STATUS: $login_body"
-	printf '%s' "$login_body" | jq -r .tokens.accessToken
+	api POST /auth/login "{\"login\":\"owner1\",\"password\":\"$PASSWORD\",\"device\":{\"hwid\":\"$(printf '%064d' 7)\",\"name\":\"e2e\",\"platform\":\"linux\"}}"
+	[ "$API_STATUS" = 200 ] || fail "login answered $API_STATUS: $(cat "$BODY")"
+	jq -r .tokens.accessToken "$BODY"
 }
 
 step "install ($DB)"
@@ -62,7 +63,7 @@ step "status"
 grep -q 'healthy' "$LOG" || fail "status does not say healthy"
 
 step "registration is closed after the owner"
-api POST /auth/register '{"login":"intruder","password":"две собаки и кот","device":{"hwid":"'"$(printf '%064d' 9)"'","name":"x","platform":"android"}}' >/dev/null
+api POST /auth/register '{"login":"intruder","password":"две собаки и кот","device":{"hwid":"'"$(printf '%064d' 9)"'","name":"x","platform":"android"}}'
 [ "$API_STATUS" = 403 ] || fail "register answered $API_STATUS, expected 403"
 
 step "user add, user list"
@@ -86,7 +87,7 @@ FRESH=$(like "$TOKEN" "")
 while [ "$(printf '%s' "$FRESH" | cut -d. -f2)" -le "$(printf '%s' "$OLD_CURSOR" | cut -d. -f2)" ]; do
 	FRESH=$(like "$TOKEN" "$FRESH")
 done
-api POST /sync "{\"cursor\":\"$OLD_CURSOR\"}" "$TOKEN" >/dev/null
+api POST /sync "{\"cursor\":\"$OLD_CURSOR\"}" "$TOKEN"
 [ "$API_STATUS" = 410 ] || fail "the old cursor answered $API_STATUS after the restore, expected 410"
 
 step "install again without changes (--repair)"
@@ -102,7 +103,8 @@ grep -q ' upgrade ' "$DIR/.state/upgrade-history.log" || fail "no upgrade histor
 ls "$DIR"/backups/melogold-backup-*-pre-upgrade.tar.gz >/dev/null 2>&1 || fail "no pre-upgrade backup"
 "$M" rollback || fail "rollback"
 grep -q "^MELOGOLD_IMAGE='$IMAGE'" "$DIR/.env" || fail "rollback did not switch back"
-api POST /sync "{\"cursor\":\"$FRESH\"}" "$(login)" >/dev/null
+TOKEN=$(login)
+api POST /sync "{\"cursor\":\"$FRESH\"}" "$TOKEN"
 [ "$API_STATUS" = 200 ] || fail "sync after the rollback answered $API_STATUS"
 
 step "uninstall --purge"
