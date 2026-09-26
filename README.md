@@ -18,7 +18,20 @@
 ## Официальный сервер и свой сервер
 
 Можно пользоваться официальным сервером Melogold или развернуть свой: клиенты позволяют указать адрес
-сервера. Для self-hosting будет готовый `docker compose`.
+сервера.
+
+### Свой сервер одной командой
+
+Linux x86_64 или aarch64, 1 ГБ памяти, Docker (установщик может поставить его сам):
+
+```sh
+curl -fsSL https://github.com/melogold-app/melogoldServer/releases/latest/download/install.sh | sudo sh
+```
+
+Установщик спросит, как клиенты будут подключаться (домен с HTTPS, домашняя сеть или свой прокси), и логин
+владельца, а в конце покажет QR-код адреса для приложений. Дальше сервером управляет команда `melogold`:
+`status`, `logs`, `backup`, `restore`, `upgrade`, `user add`, `qr`. Подробно:
+[установка](docs/self-hosting.md), [эксплуатация](docs/operations.md).
 
 ## Статус
 
@@ -28,6 +41,7 @@
 - [Архитектура](docs/DESIGN.md)
 - [Контракт API](docs/API.md) — единый для всех клиентов
 - [План реализации](docs/PLAN.md)
+- [Свой сервер](docs/self-hosting.md) и [эксплуатация](docs/operations.md)
 
 ## Лицензия
 
