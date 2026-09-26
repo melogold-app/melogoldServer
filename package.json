@@ -1,6 +1,6 @@
 {
   "name": "melogold-server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Melogold sync server: favorites, library, playlists and history across all of a user's devices.",
   "license": "AGPL-3.0-only",

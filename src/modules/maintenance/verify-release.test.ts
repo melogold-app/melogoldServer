@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import {
+  RELEASE_PUBLIC_KEY,
   ReleaseSignatureError,
   parseChecksums,
   parsePublicKey,
@@ -65,5 +66,10 @@ describe("verify-release", () => {
     refused(() => verifyChecksums(sums, [{ name: "install.sh", bytes: Buffer.from("#!/bin/sh\n") }]), /does not match/);
     refused(() => verifyChecksums(sums, [{ name: "other.tar.gz", bytes: Buffer.alloc(0) }]), /not in SHA256SUMS/);
     refused(() => parseChecksums("abc  file"), /not a SHA256SUMS line/);
+  });
+
+  test("the release key compiled into the image is a minisign Ed25519 key", () => {
+    assert.ok(RELEASE_PUBLIC_KEY !== null);
+    assert.equal(parsePublicKey(RELEASE_PUBLIC_KEY).keyId.toString("hex"), "6f555f83c314ab30");
   });
 });

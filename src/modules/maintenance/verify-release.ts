@@ -13,10 +13,10 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 
 /**
- * The release key of melogold-app/melogoldServer (minisign public key, base64 line). `null` until the maintainer
- * creates it: then every `verify-release` refuses, and upgrades fall back to the checksum alone with a warning.
+ * The release key of melogold-app/melogoldServer (minisign public key, key id `30AB14C3835F556F`, also in
+ * `deploy/melogold-release.pub`). CI signs `SHA256SUMS` of every release with its secret part.
  */
-export const RELEASE_PUBLIC_KEY: string | null = null;
+export const RELEASE_PUBLIC_KEY: string | null = "RWRvVV+DwxSrMFz+XFSx5MXcwLbAppMg+ezL1MNFFMPNkwjGVB26Bcpj";
 
 export class ReleaseSignatureError extends Error {
   constructor(message: string) {

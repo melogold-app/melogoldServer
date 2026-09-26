@@ -1,6 +1,6 @@
 /**
  * `melogold verify-release` with the minisign vectors: the signature and the listed files are checked; a tampered
- * file fails; an image without a release key refuses.
+ * file fails; the release key compiled into the image refuses the test key's signature.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -27,7 +27,7 @@ after(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** `withKey: false` runs like an image that has no release key compiled in. */
+/** `withKey: false` uses the release key compiled into the image instead of the test key. */
 async function cli(args: readonly string[], withKey = true) {
   const captured = captureOutput();
   const code = await runCli(args, captured.output, { env, ...(withKey ? { releasePublicKey: publicKey } : {}) });
@@ -57,9 +57,12 @@ describe("melogold verify-release", () => {
     assert.match(bad.stderr, /install\.sh does not match its SHA256SUMS line/);
   });
 
-  test("the image without a release key refuses", async () => {
-    const none = await cli(["verify-release", join(VECTORS, "SHA256SUMS"), join(VECTORS, "SHA256SUMS.minisig")], false);
-    assert.equal(none.code, EXIT_FAILURE);
-    assert.match(none.stderr, /no release key/);
+  test("the release key compiled into the image refuses what another key signed", async () => {
+    const other = await cli(
+      ["verify-release", join(VECTORS, "SHA256SUMS"), join(VECTORS, "SHA256SUMS.minisig")],
+      false,
+    );
+    assert.equal(other.code, EXIT_FAILURE);
+    assert.match(other.stderr, /made with another key/);
   });
 });
