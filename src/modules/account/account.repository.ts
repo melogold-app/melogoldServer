@@ -21,8 +21,10 @@ import type {
   PlayStatsTable,
   SyncBookmarksTable,
   SyncLikesTable,
+  SyncLyricsPinsTable,
   SyncPlaylistItemsTable,
   SyncPlaylistsTable,
+  SyncTrackOverridesTable,
   SyncTracksTable,
 } from "../../db/types.ts";
 
@@ -483,6 +485,14 @@ export type PlaylistRow = Pick<
   "id" | "name" | "browse_id" | "thumbnail_url" | "created_at"
 >;
 export type PlaylistItemRow = Pick<Selectable<SyncPlaylistItemsTable>, "video_id" | "sort_key" | "added_at">;
+export type TrackOverrideRow = Pick<
+  Selectable<SyncTrackOverridesTable>,
+  "video_id" | "title" | "artists_text" | "album_title" | "updated_at" | "deleted"
+>;
+export type LyricsPinRow = Pick<
+  Selectable<SyncLyricsPinsTable>,
+  "video_id" | "source" | "ref" | "start_time_ms" | "updated_at" | "deleted"
+>;
 export type PlayRow = Pick<
   Selectable<PlayEventsTable>,
   "event_id" | "video_id" | "played_at" | "play_time_ms" | "device_id"
@@ -575,6 +585,38 @@ export async function exportPlaylistItemsPage(
   return query.orderBy("sort_key").orderBy("video_id").limit(limit).execute();
 }
 
+/** Live track overrides only (`deleted = 0`), by `video_id`. */
+export async function exportTrackOverridesPage(
+  q: Queryable,
+  userId: string,
+  afterVideoId: string | null,
+  limit: number,
+): Promise<TrackOverrideRow[]> {
+  let query = q
+    .selectFrom("sync_track_overrides")
+    .select(["video_id", "title", "artists_text", "album_title", "updated_at", "deleted"])
+    .where("user_id", "=", userId)
+    .where("deleted", "=", 0);
+  if (afterVideoId !== null) query = query.where("video_id", ">", afterVideoId);
+  return query.orderBy("video_id").limit(limit).execute();
+}
+
+/** Live lyrics pins only (`deleted = 0`), by `video_id`. */
+export async function exportLyricsPinsPage(
+  q: Queryable,
+  userId: string,
+  afterVideoId: string | null,
+  limit: number,
+): Promise<LyricsPinRow[]> {
+  let query = q
+    .selectFrom("sync_lyrics_pins")
+    .select(["video_id", "source", "ref", "start_time_ms", "updated_at", "deleted"])
+    .where("user_id", "=", userId)
+    .where("deleted", "=", 0);
+  if (afterVideoId !== null) query = query.where("video_id", ">", afterVideoId);
+  return query.orderBy("video_id").limit(limit).execute();
+}
+
 /** Plays in the history only (`in_history = 1`), by `(played_at, event_id)`. */
 export async function exportPlaysPage(
   q: Queryable,
@@ -660,6 +702,8 @@ export const PURGE_TABLES = Object.freeze([
   { table: "sync_tracks", key: ["video_id"] },
   { table: "sync_likes", key: ["video_id"] },
   { table: "sync_bookmarks", key: ["type", "browse_id"] },
+  { table: "sync_track_overrides", key: ["video_id"] },
+  { table: "sync_lyrics_pins", key: ["video_id"] },
   { table: "sync_ops", key: ["seq"] },
   { table: "play_events", key: ["event_id"] },
   { table: "play_stats", key: ["video_id"] },

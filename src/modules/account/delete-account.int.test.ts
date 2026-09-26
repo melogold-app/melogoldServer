@@ -267,6 +267,36 @@ describe("account-purge (DESIGN §4.11)", () => {
           clk_dev: null,
         })
         .execute();
+      await q
+        .insertInto("sync_track_overrides")
+        .values({
+          user_id: userId,
+          video_id: "vidPURGEonx",
+          title: "t",
+          artists_text: null,
+          album_title: null,
+          updated_at: now,
+          seq: 1,
+          deleted: 0,
+          clk_at: now,
+          clk_dev: null,
+        })
+        .execute();
+      await q
+        .insertInto("sync_lyrics_pins")
+        .values({
+          user_id: userId,
+          video_id: "vidPURGEonx",
+          source: "lrclib",
+          ref: "1",
+          start_time_ms: null,
+          updated_at: now,
+          seq: 1,
+          deleted: 0,
+          clk_at: now,
+          clk_dev: null,
+        })
+        .execute();
       const playlistId = newId();
       await q
         .insertInto("sync_playlists")

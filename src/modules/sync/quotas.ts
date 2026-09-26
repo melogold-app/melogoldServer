@@ -11,6 +11,8 @@
  * | {@link ITEMS_TOTAL_QUOTA}      | 100 000 | `sync_playlist_items` (tombstones included) | `deferred quota_exceeded`              |
  * | {@link playlistItemsQuota}(id) | 10 000  | items of one playlist (tombstones included) | `deferred quota_exceeded`              |
  * | {@link TRACKS_QUOTA}           | 150 000 | `sync_tracks`                              | new metadata is not stored, op applies |
+ * | {@link TRACK_OVERRIDES_QUOTA}  | 150 000 | `sync_track_overrides` (tombstones included) | `deferred quota_exceeded`            |
+ * | {@link LYRICS_PINS_QUOTA}      | 150 000 | `sync_lyrics_pins` (tombstones included)   | `deferred quota_exceeded`              |
  * | {@link PLAY_STATS_QUOTA}       | 100 000 | `play_stats`                               | no counter for new tracks              |
  * | {@link PLAY_EVENTS_QUOTA}      | 60 000  | `play_events`                              | the oldest events are evicted          |
  *
@@ -108,6 +110,32 @@ export function playlistItemsQuota(playlistId: string): Quota {
       ),
   });
 }
+
+export const TRACK_OVERRIDES_QUOTA: Quota = Object.freeze({
+  key: "overrides",
+  limit: SYNC_LIMITS.maxTrackOverrides,
+  count: (q: Queryable, userId: string) =>
+    rows(
+      q
+        .selectFrom("sync_track_overrides")
+        .select((eb) => eb.fn.countAll().as("rows"))
+        .where("user_id", "=", userId)
+        .executeTakeFirst(),
+    ),
+});
+
+export const LYRICS_PINS_QUOTA: Quota = Object.freeze({
+  key: "lyricsPins",
+  limit: SYNC_LIMITS.maxLyricsPins,
+  count: (q: Queryable, userId: string) =>
+    rows(
+      q
+        .selectFrom("sync_lyrics_pins")
+        .select((eb) => eb.fn.countAll().as("rows"))
+        .where("user_id", "=", userId)
+        .executeTakeFirst(),
+    ),
+});
 
 export const TRACKS_QUOTA: Quota = Object.freeze({
   key: "tracks",

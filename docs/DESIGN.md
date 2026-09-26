@@ -170,6 +170,8 @@
 | Закладки альбомов и артистов | `Album/Artist.bookmarkedAt` | MVP | регистр плюс снимок метаданных (`sync_bookmarks`) |
 | Свои плейлисты с порядком, в том числе привязанные к YouTube | `Playlist`, `SongPlaylistMap` | MVP | регистр заголовка, окончательное удаление. У элементов два регистра: членство и позиция |
 | Метаданные треков | `Song` + карты альбома и артистов | MVP | `sync_tracks`, у строки свой `seq` (m2) |
+| Своё название, исполнитель и альбом трека (только текст) | — | 0.1.1 | регистр на `videoId` (`sync_track_overrides`) поверх `sync_tracks` |
+| Закреплённый текст песни (ссылка на текст у поставщика) | — | 0.1.1 | регистр на `videoId` (`sync_lyrics_pins`) |
 | История прослушиваний | `Event` | MVP | `play_events`, поток `history` |
 | Время прослушивания | `Song.totalPlayTimeMs` | MVP | серверный счётчик `play_stats` |
 | Очистка истории, «убрать из Quick Picks», «скрыть» | `clearEvents*`, удаление `Song` | MVP | водяные знаки `play_forgets` |
@@ -224,7 +226,7 @@ const wins = (reg: { seq: number; at: number; dev: string | null } | null,
 
 | Сущность | Правило |
 |---|---|
-| Лайк, закладка, заголовок плейлиста (`name`, `thumbnailUrl`) | один регистр, `wins` |
+| Лайк, закладка, заголовок плейлиста (`name`, `thumbnailUrl`), правка трека, закреплённый текст | один регистр, `wins` |
 | Элемент плейлиста | регистры членства (`mem_*`) и позиции (`pos_*`) |
 | Удаление плейлиста | окончательное: `deleted=1`, элементы удаляются физически, список уходит в `pre_image` |
 | Прослушивание | только добавление. Повтор `eventId` ничего не делает |
@@ -243,6 +245,7 @@ const wins = (reg: { seq: number; at: number; dev: string | null } | null,
 | `sync_ops` | идемпотентность ops (кроме `play.add`), аудит, `pre_image`. 180 дней | — |
 | `sync_tracks` | метаданные треков пользователя, свой `seq` | library |
 | `sync_likes`, `sync_bookmarks`, `sync_playlists`, `sync_playlist_items` | состояние библиотеки | library |
+| `sync_track_overrides`, `sync_lyrics_pins` | правки треков и закреплённые тексты, с надгробием `deleted` | library |
 | `play_events` | прослушивания. `seq` только у строк с `in_history=1` | history |
 | `play_stats`, `play_forgets` | счётчики и водяные знаки | history |
 | `playback_state` | одна строка на пользователя, с надгробием `cleared` | — |
@@ -252,7 +255,7 @@ const wins = (reg: { seq: number; at: number; dev: string | null } | null,
 ### 3.6 Курсор и потоки
 - **Формат:** `"<epoch 8 hex>.<libSeq>.<histSeq>"`. Пустая строка `""` означает оба потока с нуля. Для клиента курсор непрозрачен.
 - **Потоки:**
-  - `library`: `sync_playlists`, `sync_playlist_items`, `sync_likes`, `sync_bookmarks`, `sync_tracks`;
+  - `library`: `sync_playlists`, `sync_playlist_items`, `sync_likes`, `sync_bookmarks`, `sync_tracks`, `sync_track_overrides`, `sync_lyrics_pins`;
   - `history`: `play_events` (только строки с `seq`), `play_stats`, `play_forgets`.
 - Номера у обоих потоков из одного счётчика, но курсор у каждого свой. Новое устройство сначала получает библиотеку, потом историю.
 - **Разбор курсора:**
@@ -281,6 +284,8 @@ const wins = (reg: { seq: number; at: number; dev: string | null } | null,
 | `playlist.item.move {playlistId, videoId, after?, before?}` | Элемент есть и `wins(pos)` → новый ключ по якорям | позиция |
 | `playlist.items.replace {playlistId, videoIds[0..10000]}` | Зеркало YouTube, `pre_image` = текущий список. Для элементов из списка при `wins(mem)` → `present=1`. Для отсутствующих при `wins(mem)` → `present=0`. Порядок: элементы на LIS текущих ключей сохраняют ключи, остальные получают ключи между соседями с `wins(pos)` | членство, позиция |
 | `playlist.import {playlistId, name, browseId?, thumbnailUrl?, videoIds[]}` | Только при слиянии. Нет строки → как `create`. Живой → недостающие дописываются в конец в данном порядке с `mem_at = pos_at = 0` (серверные надгробия побеждают). Удалён → `redirected` со всеми треками | — |
+| `track.override.set {videoId, title?, artistsText?, albumTitle?}` | Замена целиком (API §4.8). Значение то же (с учётом `deleted`) → холостая. Иначе при `wins` записать поля, `deleted` = все три пусты, `updated_at = effAt`. Новая строка со снятой правкой не создаётся (холостая). `sync_tracks` не трогается: «вернуть как на YouTube» всегда есть из чего | правка |
+| `lyrics.pin.set {videoId, source?, ref?, startTimeMs?}` | То же: пустой `ref` или неизвестный `source` → `deleted`, поля `NULL` | закрепление |
 
 - **Якоря** работают одинаково на сервере и в клиентах:
   - `after` есть в списке → вставка сразу после него;
@@ -417,6 +422,7 @@ async function applyOp(oc: OpCtx, raw: WireOp): Promise<OpResult> {
 | Элементы в плейлисте / всего (с надгробиями) | 10 000 / 100 000 | `deferred quota_exceeded` |
 | Лайки / закладки каждого типа | 100 000 / 20 000 | `deferred quota_exceeded` |
 | `sync_tracks` | 150 000 | новые метаданные не сохраняются, op применяется |
+| Правки треков / закреплённые тексты (с надгробиями) | 150 000 / 150 000 | `deferred quota_exceeded` |
 | `play_stats` | 100 000 | для новых треков счётчик не создаётся, событие сохраняется |
 | `play_events` (все) | 60 000 | вытесняются самые старые `in_history=0`, затем самые старые `in_history=1` |
 | `play.add` | 2000 в час на пользователя | `deferred op_rate_limited{retryAfterSeconds}`: клиент держит op как pending и повторяет позже |

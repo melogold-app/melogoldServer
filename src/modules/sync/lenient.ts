@@ -38,6 +38,16 @@ export function cleanText(value: unknown, maxLength: number): string | null {
   return text === "" ? null : text;
 }
 
+/**
+ * A user-typed string (`track.override.set`, `lyrics.pin.set`): trimmed, cut to `maxLength` UTF-16 units; not a
+ * string, or blank → `null`.
+ */
+export function cleanTrimmedText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = truncateUtf16(value.trim(), maxLength).trimEnd();
+  return text === "" ? null : text;
+}
+
 /** An `HttpUrl` (API §1.6: `^https?://`, up to 2048), else `null`: a cut URL would be a broken one. */
 export function cleanUrl(value: unknown): string | null {
   return typeof value === "string" && isHttpUrl(value) ? value : null;

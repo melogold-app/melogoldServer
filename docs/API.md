@@ -461,10 +461,10 @@ type ServerInfo = {
 {"software":"melogold-server","version":"0.1.0","revision":"3f9c2ab","apiVersion":1,"minApiVersion":1,
  "serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","instanceName":"Melogold","publicUrl":"https://api.melogold.app",
  "secureTransport":true,"registration":"open",
- "features":{"sync":{"protocol":1,"minProtocol":1,"kinds":["like.set","bookmark.set","playlist.create","playlist.update","playlist.delete","playlist.items.add","playlist.item.remove","playlist.item.move","playlist.items.replace","playlist.import","play.add","play.baseline","history.clear","history.forget"],"streams":["library","history"]},
+ "features":{"sync":{"protocol":1,"minProtocol":1,"kinds":["like.set","bookmark.set","playlist.create","playlist.update","playlist.delete","playlist.items.add","playlist.item.remove","playlist.item.move","playlist.items.replace","playlist.import","play.add","play.baseline","history.clear","history.forget","track.override.set","lyrics.pin.set"],"streams":["library","history"]},
   "playback":{"version":1},"deviceLinking":{"version":1,"modes":["request","invite"],"ttlSeconds":300,"longPollSeconds":25},
   "recoveryCode":{"version":1},"export":{"version":1},"accountDeletion":{"version":1},"registrationPow":{"version":1},"lyrics":{"version":1}},
- "limits":{"sync":{"maxOpsPerRequest":500,"maxBodyBytes":4194304,"maxWorkUnitsPerRequest":20000,"defaultPageSize":500,"maxPageSize":2000,"maxVideoIdsPerAdd":500,"maxVideoIdsPerList":10000,"maxBaselineEntries":500,"maxIncludeKeys":1000,"maxPlaylists":1000,"maxPlaylistItems":10000,"maxItemsTotal":100000,"maxLikes":100000,"maxBookmarksPerType":20000,"maxTracks":150000,"maxPlayStats":100000,"maxPlayEvents":60000,"playAddPerHour":2000},
+ "limits":{"sync":{"maxOpsPerRequest":500,"maxBodyBytes":4194304,"maxWorkUnitsPerRequest":20000,"defaultPageSize":500,"maxPageSize":2000,"maxVideoIdsPerAdd":500,"maxVideoIdsPerList":10000,"maxBaselineEntries":500,"maxIncludeKeys":1000,"maxPlaylists":1000,"maxPlaylistItems":10000,"maxItemsTotal":100000,"maxLikes":100000,"maxBookmarksPerType":20000,"maxTracks":150000,"maxTrackOverrides":150000,"maxLyricsPins":150000,"maxPlayStats":100000,"maxPlayEvents":60000,"playAddPerHour":2000},
   "history":{"retentionDays":400,"maxEvents":50000,"mergeUploadMax":20000},
   "playback":{"queueMax":200,"maxBodyBytes":131072},
   "account":{"maxDevices":20,"newDeviceRestrictHours":24,"login":{"minLength":3,"maxLength":32,"pattern":"^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$"},"password":{"minLength":8,"maxLength":128}}},
@@ -618,7 +618,8 @@ type ExportDocument = {
   server: { serverId: Uuid; instanceName: string; version: string };
   account: { id: Uuid; login: string; createdAt: Iso; passwordChangedAt: Iso };
   devices: DeviceDto[];
-  library: { tracks: TrackDto[]; likes: LikeRow[] /*liked*/; bookmarks: BookmarkRow[] /*bookmarked*/; playlists: ExportPlaylist[] /*живые*/ };
+  library: { tracks: TrackDto[]; likes: LikeRow[] /*liked*/; bookmarks: BookmarkRow[] /*bookmarked*/; playlists: ExportPlaylist[] /*живые*/;
+             overrides: TrackOverrideRow[] /*живые*/; lyricsPins: LyricsPinRow[] /*живые*/ };
   history: { plays: PlayRow[] /*in_history*/; playStats: PlayStatRow[]; playForgets: PlayForgetRow[] };
   playback: PlaybackState | null;
 };
@@ -626,7 +627,7 @@ type ExportPlaylist = { id: Uuid; name: string; browseId: string | null; thumbna
 type ExportPlaylistItem = { videoId: VideoId; addedAt: Iso };                  // ORDER BY sortKey, videoId (ordinal)
 ```
 ```json
-{"format":"melogold-export","formatVersion":1,"exportedAt":"2026-09-23T10:00:00.000Z","server":{"serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","instanceName":"Melogold","version":"0.1.0"},"account":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-23T10:00:00.000Z"},"devices":[],"library":{"tracks":[],"likes":[],"bookmarks":[],"playlists":[{"id":"b8e0d4c2-1a3b-4c5d-9e6f-7a8b9c0d1e2f","name":"Дорога","browseId":null,"thumbnailUrl":null,"createdAt":"2026-09-23T10:00:00.000Z","items":[{"videoId":"dQw4w9WgXcQ","addedAt":"2026-09-23T10:00:00.000Z"}]}]},"history":{"plays":[],"playStats":[],"playForgets":[]},"playback":null}
+{"format":"melogold-export","formatVersion":1,"exportedAt":"2026-09-23T10:00:00.000Z","server":{"serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","instanceName":"Melogold","version":"0.1.0"},"account":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-23T10:00:00.000Z"},"devices":[],"library":{"tracks":[],"likes":[],"bookmarks":[],"playlists":[{"id":"b8e0d4c2-1a3b-4c5d-9e6f-7a8b9c0d1e2f","name":"Дорога","browseId":null,"thumbnailUrl":null,"createdAt":"2026-09-23T10:00:00.000Z","items":[{"videoId":"dQw4w9WgXcQ","addedAt":"2026-09-23T10:00:00.000Z"}]}],"overrides":[{"videoId":"dQw4w9WgXcQ","title":"Never Gonna Give You Up","artistsText":null,"albumTitle":"Whenever You Need Somebody","updatedAt":"2026-09-23T10:00:00.000Z","deleted":false}],"lyricsPins":[]},"history":{"plays":[],"playStats":[],"playForgets":[]},"playback":null}
 ```
 
 ### 4.6 Привязка устройств (QR и код через сервер)
@@ -749,7 +750,8 @@ type SyncRequest = {
   ops?: SyncOp[];                        // 0..500, без дублей opId
   include?: SyncInclude;                 // вернуть текущие строки этих ключей (всего ≤1000)
 };
-type SyncInclude = { likes?: VideoId[]; playlists?: Uuid[]; bookmarks?: BookmarkKey[]; playStats?: VideoId[] };
+type SyncInclude = { likes?: VideoId[]; playlists?: Uuid[]; bookmarks?: BookmarkKey[]; playStats?: VideoId[];
+                     overrides?: VideoId[]; lyricsPins?: VideoId[] };
 type BookmarkKey = { type: string /*album|artist*/; browseId: BrowseId };
 
 type SyncOp = {                          // плоская схема; на маршруте проверяются только opId/kind/at/base (DESIGN §3.9)
@@ -762,6 +764,8 @@ type SyncOp = {                          // плоская схема; на ма
   playedAt?: Iso; playTimeMs?: number; history?: boolean; playtime?: boolean;
   mode?: string; entries?: BaselineEntry[];
   eventsBefore?: Iso; resetTotal?: boolean;
+  artistsText?: string; albumTitle?: string;   // track.override.set (с title)
+  source?: string; ref?: string; startTimeMs?: number;   // lyrics.pin.set
   tracks?: TrackInput[];                 // метаданные упомянутых videoId (мягкий разбор)
 };
 type BaselineEntry = { videoId: string; totalMs: number /*1..2^53−1*/ };
@@ -780,6 +784,7 @@ type SyncResponse = {
   cursor: Cursor; hasMore: boolean; serverTime: Iso;
   tracks: TrackDto[]; playlists: PlaylistRow[]; items: PlaylistItemRow[];
   likes: LikeRow[]; bookmarks: BookmarkRow[];
+  overrides: TrackOverrideRow[]; lyricsPins: LyricsPinRow[];
   plays: PlayRow[]; playStats: PlayStatRow[]; playForgets: PlayForgetRow[];
 };
 type PlaylistRow = { id: Uuid; name: string; browseId: string | null; thumbnailUrl: string | null; createdAt: Iso; deleted: boolean };
@@ -787,6 +792,10 @@ type PlaylistItemRow = { playlistId: Uuid; videoId: VideoId; present: boolean; s
 type LikeRow = { videoId: VideoId; liked: boolean; likedAt: Iso | null };
 type BookmarkRow = { type: string; browseId: BrowseId; bookmarked: boolean; bookmarkedAt: Iso | null;
                      title: string | null; subtitle: string | null; thumbnailUrl: string | null; year: string | null };
+type TrackOverrideRow = { videoId: VideoId; title: string | null; artistsText: string | null; albumTitle: string | null;
+                          updatedAt: Iso; deleted: boolean };
+type LyricsPinRow = { videoId: VideoId; source: string | null /*youtube_music|lrclib|kugou*/; ref: string | null;
+                      startTimeMs: number | null; updatedAt: Iso; deleted: boolean };
 type PlayRow = { eventId: Uuid; videoId: VideoId; playedAt: Iso; playTimeMs: number; deviceId: Uuid | null };
 type PlayStatRow = { videoId: VideoId; totalPlayTimeMs: number; lastPlayedAt: Iso | null };
 type PlayForgetRow = { videoId: string /*VideoId или "*"*/; eventsBefore: Iso /*включительно*/; totalBefore: Iso | null };
@@ -810,11 +819,15 @@ type PlayForgetRow = { videoId: string /*VideoId или "*"*/; eventsBefore: Iso
 | `play.baseline` | `mode` (`add\|atLeast`), `entries` (1..500, уникальные `videoId`) | `tracks` | `stat:batch` |
 | `history.clear` | `eventsBefore` | — | `hist:*` |
 | `history.forget` | `videoId`, `eventsBefore`, `resetTotal` | — | `stat:<videoId>` |
+| `track.override.set` | `videoId` | `title`, `artistsText`, `albumTitle` | `ovr:<videoId>` |
+| `lyrics.pin.set` | `videoId` | `source` (`youtube_music\|lrclib\|kugou`), `ref`, `startTimeMs` (0..86400000) | `lpin:<videoId>` |
 
 **Мягкая нормализация полей op:**
 - `name` обрезается до 200 символов, пустое значение превращается в «Без названия» или «Untitled».
 - Для `title`, `subtitle`, `year`, `thumbnailUrl` у закладок и `thumbnailUrl` у плейлистов: обрезка, при неверном значении — `null`.
 - `tracks[]` разбираются по DESIGN §3.9.
+- `track.override.set` — правка пользователя поверх метаданных YouTube (`sync_tracks` она не меняет). Замена целиком: `title`, `artistsText`, `albumTitle` обрезаются по краям (trim) и до 500 символов; отсутствующее, пустое или неверного типа поле — правки этого поля нет. Все три пустые — правка снята (`deleted`).
+- `lyrics.pin.set` — закреплённый текст песни: ссылка на текст у поставщика, сам текст сервер не хранит и к поставщикам не ходит. `ref` — номер текста у поставщика, обрезка по краям, до 200 символов: `lrclib` — id записи, `youtube_music` — browseId текста (`MPLYt…`), `kugou` — `<id>:<accesskey>`. Пустой `ref` или неизвестный `source` — закрепление снято (`deleted`). `startTimeMs` вне 0..86400000 или неверного типа — `null`. Замена целиком.
 
 **Ошибки запроса целиком:** 400 `invalid_request`; 401; 409 `protocol_unsupported`; 410 `cursor_invalid`, `cursor_expired`; 413 (тело или бюджет); 429; 503 `server_busy`, `storage_full`.
 
@@ -841,14 +854,14 @@ type PlayForgetRow = { videoId: string /*VideoId или "*"*/; eventsBefore: Iso
  "playlists":[{"id":"c9d1e2f3-a4b5-5c6d-8e7f-9a0b1c2d3e4f","name":"Дорога (восстановлено)","browseId":null,"thumbnailUrl":null,"createdAt":"2026-09-23T10:00:01.000Z","deleted":false}],
  "items":[{"playlistId":"c9d1e2f3-a4b5-5c6d-8e7f-9a0b1c2d3e4f","videoId":"abcdefghijk","present":true,"sortKey":"a0","addedAt":"2026-09-23T10:00:01.000Z"}],
  "likes":[{"videoId":"a1B2c3D4e5F","liked":true,"likedAt":"2026-09-23T10:00:00.123Z"}],
- "bookmarks":[],
+ "bookmarks":[],"overrides":[],"lyricsPins":[],
  "plays":[{"eventId":"b71e2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d","videoId":"a1B2c3D4e5F","playedAt":"2026-09-23T09:58:10.000Z","playTimeMs":212000,"deviceId":"9b1e2f4a-7c3d-4e5f-8a9b-0c1d2e3f4a5b"}],
  "playStats":[{"videoId":"a1B2c3D4e5F","totalPlayTimeMs":1484000,"lastPlayedAt":"2026-09-23T09:58:10.000Z"}],
  "playForgets":[{"videoId":"abcdefghijk","eventsBefore":"2026-09-23T10:00:05.000Z","totalBefore":null}]}
 ```
 - Каждый ключ строки встречается один раз.
 - Массивы упорядочены по внутреннему `seq`, `tracks` — по `videoId`.
-- Порядок применения на клиенте: `tracks → playlists (по createdAt) → items → likes → bookmarks → playStats → plays → playForgets`.
+- Порядок применения на клиенте: `tracks → playlists (по createdAt) → items → likes → bookmarks → overrides → lyricsPins → playStats → plays → playForgets`.
 - Если голова сдвинулась, после commit остальным устройствам уходит SSE `sync.changed`.
 
 ### 4.9 Playback
@@ -1426,6 +1439,35 @@ CREATE TABLE lyrics (
 CREATE UNIQUE INDEX lyrics_user_video ON lyrics (user_id, video_id);
 CREATE UNIQUE INDEX lyrics_user_rev   ON lyrics (user_id, rev);
 CREATE INDEX lyrics_video ON lyrics (video_id, updated_at);
+-- ===== 0007_overrides_pins ================================================
+CREATE TABLE sync_track_overrides (                                                         -- track.override.set
+  user_id      ID   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video_id     ID   NOT NULL CHECK (length(video_id) = 11),
+  title        TXT  NULL,
+  artists_text TXT  NULL,
+  album_title  TXT  NULL,
+  updated_at   TS   NOT NULL,
+  seq          BIG  NOT NULL,
+  deleted      BOOL NOT NULL,
+  clk_at       TS   NOT NULL,
+  clk_dev      ID   NULL,
+  PRIMARY KEY (user_id, video_id)
+);
+CREATE INDEX sync_track_overrides_pull ON sync_track_overrides (user_id, seq);
+CREATE TABLE sync_lyrics_pins (                                                             -- lyrics.pin.set
+  user_id       ID   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video_id      ID   NOT NULL CHECK (length(video_id) = 11),
+  source        TXT  NULL,                                                                  -- youtube_music|lrclib|kugou
+  ref           TXT  NULL,
+  start_time_ms INT  NULL,
+  updated_at    TS   NOT NULL,
+  seq           BIG  NOT NULL,
+  deleted       BOOL NOT NULL,
+  clk_at        TS   NOT NULL,
+  clk_dev       ID   NULL,
+  PRIMARY KEY (user_id, video_id)
+);
+CREATE INDEX sync_lyrics_pins_pull ON sync_lyrics_pins (user_id, seq);
 -- Kysely сам создаёт kysely_migration и kysely_migration_lock.
 ```
 
@@ -1555,7 +1597,8 @@ type ServerLimits = {
   sync: { maxOpsPerRequest: 500; maxBodyBytes: 4194304; maxWorkUnitsPerRequest: 20000; defaultPageSize: 500; maxPageSize: 2000;
           maxVideoIdsPerAdd: 500; maxVideoIdsPerList: 10000; maxBaselineEntries: 500; maxIncludeKeys: 1000;
           maxPlaylists: 1000; maxPlaylistItems: 10000; maxItemsTotal: 100000; maxLikes: 100000; maxBookmarksPerType: 20000;
-          maxTracks: 150000; maxPlayStats: 100000; maxPlayEvents: 60000; playAddPerHour: 2000 };
+          maxTracks: 150000; maxTrackOverrides: 150000; maxLyricsPins: 150000;
+          maxPlayStats: 100000; maxPlayEvents: 60000; playAddPerHour: 2000 };
   history: { retentionDays: number; maxEvents: number; mergeUploadMax: number };   // из env
   playback: { queueMax: 200; maxBodyBytes: 131072 };
   account: { maxDevices: number | null; newDeviceRestrictHours: number;
@@ -1571,4 +1614,5 @@ type ServerLimits = {
 - `videoType` — 32;
 - URL — 2048;
 - `DeviceName` — 64;
+- `ref` закреплённого текста (`lyrics.pin.set`) — 200;
 - `osVersion`, `model`, `clientVersion` — 64.

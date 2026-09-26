@@ -54,7 +54,7 @@ describe("op registry", () => {
       handler.touch(wire(kind), touched);
       assert.deepEqual(
         Object.values(touched).map((keys) => keys.size),
-        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
       );
     }
   });

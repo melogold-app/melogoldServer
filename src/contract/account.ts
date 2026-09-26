@@ -27,7 +27,7 @@ import {
 } from "./common.ts";
 import { STRING_LIMITS } from "./limits.ts";
 import { PlaybackState } from "./playback.ts";
-import { BookmarkRow, LikeRow, PlayForgetRow, PlayRow, PlayStatRow } from "./sync.ts";
+import { BookmarkRow, LikeRow, LyricsPinRow, PlayForgetRow, PlayRow, PlayStatRow, TrackOverrideRow } from "./sync.ts";
 
 export const ChangePasswordRequest = z
   .object({
@@ -101,6 +101,8 @@ export const ExportLibrary = z
     likes: z.array(LikeRow).meta({ description: "Liked only." }),
     bookmarks: z.array(BookmarkRow).meta({ description: "Bookmarked only." }),
     playlists: z.array(ExportPlaylist).meta({ description: "Live playlists only." }),
+    overrides: z.array(TrackOverrideRow).meta({ description: "Live overrides only." }),
+    lyricsPins: z.array(LyricsPinRow).meta({ description: "Live pins only." }),
   })
   .meta({ id: "ExportLibrary" });
 

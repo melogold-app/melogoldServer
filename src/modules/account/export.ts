@@ -6,7 +6,8 @@
  *   {@link EXPORT_PAGE_SIZE} rows, each page in its own short `db.read` (docs/database.md §2.3: SQLite has one
  *   connection, long reads would hold everyone). So the document is **not an atomic snapshot**, as the API says.
  * - Only what the user owns and sees: liked videos, bookmarked albums and artists, live playlists with their present
- *   items (`ORDER BY sort_key, video_id`), plays in the history, totals and watermarks. **No secrets:** no password or
+ *   items (`ORDER BY sort_key, video_id`), live track overrides and lyrics pins, plays in the history, totals and
+ *   watermarks. **No secrets:** no password or
  *   recovery code hashes, no tokens, no hwid (not even its hash).
  * - Keys come in the order of the contract (`ExportDocument` and its components), so a client can stream-parse it.
  * - If a page fails after the first bytes went out, the stream is destroyed: the client sees a truncated download and
@@ -24,11 +25,13 @@ import {
   toBookmarkDto,
   toDeviceDto,
   toLikeDto,
+  toLyricsPinDto,
   toPlayDto,
   toPlayForgetDto,
   toPlayStatDto,
   toPlaybackState,
   toTrackDto,
+  toTrackOverrideDto,
 } from "./dto.ts";
 
 /** Rows per keyset page (one short read transaction each). */
@@ -178,6 +181,20 @@ export async function prepareExport(
         ctx.db.read((q) => repo.exportPlaylistsPage(q, userId, after, limit)),
       (row) => ({ createdAt: row.created_at, id: row.id }),
       (row) => playlist(row),
+      pageSize,
+    );
+    yield `],"overrides":[`;
+    yield* arrayMembers(
+      (after: string | null, limit) => ctx.db.read((q) => repo.exportTrackOverridesPage(q, userId, after, limit)),
+      (row) => row.video_id,
+      (row) => JSON.stringify(toTrackOverrideDto(row)),
+      pageSize,
+    );
+    yield `],"lyricsPins":[`;
+    yield* arrayMembers(
+      (after: string | null, limit) => ctx.db.read((q) => repo.exportLyricsPinsPage(q, userId, after, limit)),
+      (row) => row.video_id,
+      (row) => JSON.stringify(toLyricsPinDto(row)),
       pageSize,
     );
     yield `]},"history":{"plays":[`;

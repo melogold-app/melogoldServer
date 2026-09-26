@@ -260,6 +260,32 @@ export type LyricsTable = {
   updated_at: number; // TS
 };
 
+export type SyncTrackOverridesTable = {
+  user_id: string; // ID
+  video_id: string; // ID
+  title: string | null; // TXT
+  artists_text: string | null; // TXT
+  album_title: string | null; // TXT
+  updated_at: number; // TS
+  seq: number; // BIG
+  deleted: 0 | 1; // BOOL
+  clk_at: number; // TS
+  clk_dev: string | null; // ID
+};
+
+export type SyncLyricsPinsTable = {
+  user_id: string; // ID
+  video_id: string; // ID
+  source: string | null; // TXT
+  ref: string | null; // TXT
+  start_time_ms: number | null; // INT
+  updated_at: number; // TS
+  seq: number; // BIG
+  deleted: 0 | 1; // BOOL
+  clk_at: number; // TS
+  clk_dev: string | null; // ID
+};
+
 export type Database = {
   server_meta: ServerMetaTable;
   users: UsersTable;
@@ -279,4 +305,6 @@ export type Database = {
   play_stats: PlayStatsTable;
   play_forgets: PlayForgetsTable;
   lyrics: LyricsTable;
+  sync_track_overrides: SyncTrackOverridesTable;
+  sync_lyrics_pins: SyncLyricsPinsTable;
 };

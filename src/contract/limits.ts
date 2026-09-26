@@ -25,6 +25,8 @@ export const SYNC_LIMITS = Object.freeze({
   maxLikes: 100_000,
   maxBookmarksPerType: 20_000,
   maxTracks: 150_000,
+  maxTrackOverrides: 150_000,
+  maxLyricsPins: 150_000,
   maxPlayStats: 100_000,
   maxPlayEvents: 60_000,
   playAddPerHour: 2000,
@@ -63,6 +65,8 @@ export const STRING_LIMITS = Object.freeze({
   videoType: 32,
   url: 2048,
   deviceName: 64,
+  /** `ref` of `lyrics.pin.set`. */
+  lyricsRef: 200,
   /** `osVersion`, `model`, `clientVersion`. */
   deviceField: 64,
   browseId: 64,

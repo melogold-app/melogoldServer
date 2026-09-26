@@ -302,7 +302,16 @@ export function forcedKeys(touched: TouchedKeys | null, include: SyncInclude | u
   if (touched === null && include === undefined) return null;
   const keys = newTouchedKeys();
   if (touched) {
-    for (const name of ["likes", "bookmarks", "playlists", "items", "playStats", "playForgets"] as const) {
+    for (const name of [
+      "likes",
+      "bookmarks",
+      "playlists",
+      "items",
+      "playStats",
+      "playForgets",
+      "overrides",
+      "lyricsPins",
+    ] as const) {
       for (const key of touched[name]) keys[name].add(key);
     }
   }
@@ -310,6 +319,8 @@ export function forcedKeys(touched: TouchedKeys | null, include: SyncInclude | u
   for (const id of include?.playlists ?? []) keys.playlists.add(id);
   for (const bookmark of include?.bookmarks ?? []) keys.bookmarks.add(bookmarkKey(bookmark.type, bookmark.browseId));
   for (const videoId of include?.playStats ?? []) keys.playStats.add(videoId);
+  for (const videoId of include?.overrides ?? []) keys.overrides.add(videoId);
+  for (const videoId of include?.lyricsPins ?? []) keys.lyricsPins.add(videoId);
   return keys;
 }
 

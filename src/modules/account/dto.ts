@@ -10,9 +10,11 @@ import type { PlaybackState } from "../../contract/playback.ts";
 import type {
   BookmarkRow as BookmarkDto,
   LikeRow as LikeDto,
+  LyricsPinRow as LyricsPinDto,
   PlayForgetRow as PlayForgetDto,
   PlayRow as PlayDto,
   PlayStatRow as PlayStatDto,
+  TrackOverrideRow as TrackOverrideDto,
 } from "../../contract/sync.ts";
 import { fromDbBool } from "../../db/codecs.ts";
 import { formatIso, formatIsoOrNull } from "../../lib/time.ts";
@@ -22,10 +24,12 @@ import type {
   BookmarkRow,
   DeviceRow,
   LikeRow,
+  LyricsPinRow,
   PlaybackRow,
   PlayForgetRow,
   PlayRow,
   PlayStatRow,
+  TrackOverrideRow,
   TrackRow,
 } from "./account.repository.ts";
 
@@ -129,6 +133,28 @@ export function toBookmarkDto(row: BookmarkRow): BookmarkDto {
     subtitle: row.subtitle,
     thumbnailUrl: row.thumbnail_url,
     year: row.year,
+  };
+}
+
+export function toTrackOverrideDto(row: TrackOverrideRow): TrackOverrideDto {
+  return {
+    videoId: row.video_id,
+    title: row.title,
+    artistsText: row.artists_text,
+    albumTitle: row.album_title,
+    updatedAt: formatIso(row.updated_at),
+    deleted: fromDbBool(row.deleted),
+  };
+}
+
+export function toLyricsPinDto(row: LyricsPinRow): LyricsPinDto {
+  return {
+    videoId: row.video_id,
+    source: row.source,
+    ref: row.ref,
+    startTimeMs: row.start_time_ms,
+    updatedAt: formatIso(row.updated_at),
+    deleted: fromDbBool(row.deleted),
   };
 }
 

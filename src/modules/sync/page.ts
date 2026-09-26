@@ -19,6 +19,7 @@ import type { Selectable } from "kysely";
 import type {
   BookmarkRow,
   LikeRow,
+  LyricsPinRow,
   PlayForgetRow,
   PlaylistItemRow,
   PlaylistRow,
@@ -26,6 +27,7 @@ import type {
   PlayStatRow,
   SyncResponse,
   SyncStream,
+  TrackOverrideRow,
 } from "../../contract/sync.ts";
 import { selectInChunks } from "../../db/batch.ts";
 import { fromDbBool } from "../../db/codecs.ts";
@@ -36,8 +38,10 @@ import type {
   PlayStatsTable,
   SyncBookmarksTable,
   SyncLikesTable,
+  SyncLyricsPinsTable,
   SyncPlaylistItemsTable,
   SyncPlaylistsTable,
+  SyncTrackOverridesTable,
 } from "../../db/types.ts";
 import { formatIso, formatIsoOrNull } from "../../lib/time.ts";
 import type { CursorPosition } from "./cursor.ts";
@@ -64,6 +68,8 @@ const BOOKMARK_COLUMNS = [
   "year",
   "seq",
 ] as const;
+const OVERRIDE_COLUMNS = ["video_id", "title", "artists_text", "album_title", "updated_at", "deleted", "seq"] as const;
+const PIN_COLUMNS = ["video_id", "source", "ref", "start_time_ms", "updated_at", "deleted", "seq"] as const;
 const PLAY_COLUMNS = ["event_id", "video_id", "played_at", "play_time_ms", "device_id", "seq"] as const;
 const STAT_COLUMNS = ["video_id", "total_ms", "last_played_at", "seq"] as const;
 const FORGET_COLUMNS = ["video_id", "events_before", "total_before", "seq"] as const;
@@ -72,6 +78,8 @@ export type PlaylistDbRow = Pick<Selectable<SyncPlaylistsTable>, (typeof PLAYLIS
 export type ItemDbRow = Pick<Selectable<SyncPlaylistItemsTable>, (typeof ITEM_COLUMNS)[number]>;
 export type LikeDbRow = Pick<Selectable<SyncLikesTable>, (typeof LIKE_COLUMNS)[number]>;
 export type BookmarkDbRow = Pick<Selectable<SyncBookmarksTable>, (typeof BOOKMARK_COLUMNS)[number]>;
+export type OverrideDbRow = Pick<Selectable<SyncTrackOverridesTable>, (typeof OVERRIDE_COLUMNS)[number]>;
+export type PinDbRow = Pick<Selectable<SyncLyricsPinsTable>, (typeof PIN_COLUMNS)[number]>;
 /** `play_events` rows of the history stream always have a `seq`. */
 export type PlayDbRow = Omit<Pick<Selectable<PlayEventsTable>, (typeof PLAY_COLUMNS)[number]>, "seq"> & {
   seq: number;
@@ -85,6 +93,8 @@ export type ResponseRows = Readonly<{
   items: Map<string, ItemDbRow>;
   likes: Map<string, LikeDbRow>;
   bookmarks: Map<string, BookmarkDbRow>;
+  overrides: Map<string, OverrideDbRow>;
+  lyricsPins: Map<string, PinDbRow>;
   tracks: Map<string, TrackRow>;
   plays: Map<string, PlayDbRow>;
   playStats: Map<string, StatDbRow>;
@@ -97,6 +107,8 @@ export function newResponseRows(): ResponseRows {
     items: new Map(),
     likes: new Map(),
     bookmarks: new Map(),
+    overrides: new Map(),
+    lyricsPins: new Map(),
     tracks: new Map(),
     plays: new Map(),
     playStats: new Map(),
@@ -109,6 +121,8 @@ const add = {
   item: (rows: ResponseRows, row: ItemDbRow) => rows.items.set(itemKey(row.playlist_id, row.video_id), row),
   like: (rows: ResponseRows, row: LikeDbRow) => rows.likes.set(row.video_id, row),
   bookmark: (rows: ResponseRows, row: BookmarkDbRow) => rows.bookmarks.set(bookmarkKey(row.type, row.browse_id), row),
+  override: (rows: ResponseRows, row: OverrideDbRow) => rows.overrides.set(row.video_id, row),
+  pin: (rows: ResponseRows, row: PinDbRow) => rows.lyricsPins.set(row.video_id, row),
   track: (rows: ResponseRows, row: TrackRow) => rows.tracks.set(row.video_id, row),
   play: (rows: ResponseRows, row: PlayDbRow) => rows.plays.set(row.event_id, row),
   stat: (rows: ResponseRows, row: StatDbRow) => rows.playStats.set(row.video_id, row),
@@ -190,6 +204,30 @@ function librarySources(q: Queryable, userId: string): StreamSource[] {
           .limit(limit)
           .execute()
       ).map(tag(add.track)),
+    async (after, head, limit) =>
+      (
+        await q
+          .selectFrom("sync_track_overrides")
+          .select(OVERRIDE_COLUMNS)
+          .where("user_id", "=", userId)
+          .where("seq", ">", after)
+          .where("seq", "<=", head)
+          .orderBy("seq")
+          .limit(limit)
+          .execute()
+      ).map(tag(add.override)),
+    async (after, head, limit) =>
+      (
+        await q
+          .selectFrom("sync_lyrics_pins")
+          .select(PIN_COLUMNS)
+          .where("user_id", "=", userId)
+          .where("seq", ">", after)
+          .where("seq", "<=", head)
+          .orderBy("seq")
+          .limit(limit)
+          .execute()
+      ).map(tag(add.pin)),
   ];
 }
 
@@ -349,6 +387,26 @@ export async function readForcedRows(
       add.bookmark(rows, row);
     }
   }
+  for (const row of await selectInChunks([...keys.overrides], (chunk) =>
+    q
+      .selectFrom("sync_track_overrides")
+      .select(OVERRIDE_COLUMNS)
+      .where("user_id", "=", userId)
+      .where("video_id", "in", chunk)
+      .execute(),
+  )) {
+    add.override(rows, row);
+  }
+  for (const row of await selectInChunks([...keys.lyricsPins], (chunk) =>
+    q
+      .selectFrom("sync_lyrics_pins")
+      .select(PIN_COLUMNS)
+      .where("user_id", "=", userId)
+      .where("video_id", "in", chunk)
+      .execute(),
+  )) {
+    add.pin(rows, row);
+  }
   for (const row of await readPlaylists(q, userId, [...keys.playlists])) add.playlist(rows, row);
   for (const [playlistId, videoIds] of groupByFirst(keys.items)) {
     for (const row of await selectInChunks(videoIds, (chunk) =>
@@ -464,6 +522,28 @@ export function toBookmarkRow(row: BookmarkDbRow): BookmarkRow {
   };
 }
 
+export function toTrackOverrideRow(row: OverrideDbRow): TrackOverrideRow {
+  return {
+    videoId: row.video_id,
+    title: row.title,
+    artistsText: row.artists_text,
+    albumTitle: row.album_title,
+    updatedAt: formatIso(row.updated_at),
+    deleted: fromDbBool(row.deleted),
+  };
+}
+
+export function toLyricsPinRow(row: PinDbRow): LyricsPinRow {
+  return {
+    videoId: row.video_id,
+    source: row.source,
+    ref: row.ref,
+    startTimeMs: row.start_time_ms,
+    updatedAt: formatIso(row.updated_at),
+    deleted: fromDbBool(row.deleted),
+  };
+}
+
 export function toPlayRow(row: PlayDbRow): PlayRow {
   return {
     eventId: row.event_id,
@@ -488,7 +568,16 @@ export function toPlayForgetRow(row: ForgetDbRow): PlayForgetRow {
 
 export type ResponseArrays = Pick<
   SyncResponse,
-  "tracks" | "playlists" | "items" | "likes" | "bookmarks" | "plays" | "playStats" | "playForgets"
+  | "tracks"
+  | "playlists"
+  | "items"
+  | "likes"
+  | "bookmarks"
+  | "overrides"
+  | "lyricsPins"
+  | "plays"
+  | "playStats"
+  | "playForgets"
 >;
 
 /** The arrays of `SyncResponse`: by `seq`, `tracks` by `videoId` (ordinal). */
@@ -502,6 +591,8 @@ export function responseArrays(rows: ResponseRows): ResponseArrays {
     items: bySeq(rows.items.values()).map(toItemRow),
     likes: bySeq(rows.likes.values()).map(toLikeRow),
     bookmarks: bySeq(rows.bookmarks.values()).map(toBookmarkRow),
+    overrides: bySeq(rows.overrides.values()).map(toTrackOverrideRow),
+    lyricsPins: bySeq(rows.lyricsPins.values()).map(toLyricsPinRow),
     plays: bySeq(rows.plays.values()).map(toPlayRow),
     playStats: bySeq(rows.playStats.values()).map(toPlayStatRow),
     playForgets: bySeq(rows.playForgets.values()).map(toPlayForgetRow),
@@ -510,5 +601,16 @@ export function responseArrays(rows: ResponseRows): ResponseArrays {
 
 /** Empty arrays (a pull at the head). */
 export function emptyArrays(): ResponseArrays {
-  return { tracks: [], playlists: [], items: [], likes: [], bookmarks: [], plays: [], playStats: [], playForgets: [] };
+  return {
+    tracks: [],
+    playlists: [],
+    items: [],
+    likes: [],
+    bookmarks: [],
+    overrides: [],
+    lyricsPins: [],
+    plays: [],
+    playStats: [],
+    playForgets: [],
+  };
 }

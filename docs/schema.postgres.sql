@@ -337,3 +337,37 @@ CREATE UNIQUE INDEX lyrics_user_video ON lyrics (user_id, video_id);
 CREATE UNIQUE INDEX lyrics_user_rev ON lyrics (user_id, rev);
 
 CREATE INDEX lyrics_video ON lyrics (video_id, updated_at);
+
+-- ===== 0007_overrides_pins ===================================================
+
+CREATE TABLE sync_track_overrides (
+  user_id      text COLLATE "C" NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video_id     text COLLATE "C" NOT NULL CHECK (length(video_id) = 11),
+  title        text NULL,
+  artists_text text NULL,
+  album_title  text NULL,
+  updated_at   bigint NOT NULL,
+  seq          bigint NOT NULL,
+  deleted      integer NOT NULL CHECK (deleted IN (0,1)),
+  clk_at       bigint NOT NULL,
+  clk_dev      text COLLATE "C" NULL,
+  PRIMARY KEY (user_id, video_id)
+);
+
+CREATE INDEX sync_track_overrides_pull ON sync_track_overrides (user_id, seq);
+
+CREATE TABLE sync_lyrics_pins (
+  user_id       text COLLATE "C" NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video_id      text COLLATE "C" NOT NULL CHECK (length(video_id) = 11),
+  source        text NULL,
+  ref           text NULL,
+  start_time_ms integer NULL,
+  updated_at    bigint NOT NULL,
+  seq           bigint NOT NULL,
+  deleted       integer NOT NULL CHECK (deleted IN (0,1)),
+  clk_at        bigint NOT NULL,
+  clk_dev       text COLLATE "C" NULL,
+  PRIMARY KEY (user_id, video_id)
+);
+
+CREATE INDEX sync_lyrics_pins_pull ON sync_lyrics_pins (user_id, seq);

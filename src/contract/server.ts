@@ -76,6 +76,8 @@ export const SyncLimits = z
     maxLikes: IntOut,
     maxBookmarksPerType: IntOut,
     maxTracks: IntOut,
+    maxTrackOverrides: IntOut,
+    maxLyricsPins: IntOut,
     maxPlayStats: IntOut,
     maxPlayEvents: IntOut,
     playAddPerHour: IntOut,

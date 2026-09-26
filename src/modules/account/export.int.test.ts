@@ -245,6 +245,54 @@ async function seedLibrary(userId: string): Promise<{ included: Record<string, u
       .values({ user_id: userId, video_id: "vidHISTORYx", total_ms: 120_000, last_played_at: now, seq: 1 })
       .execute();
 
+    const register = { updated_at: now, seq: 1, clk_at: now, clk_dev: null };
+    await q
+      .insertInto("sync_track_overrides")
+      .values([
+        {
+          user_id: userId,
+          video_id: "vidOVERRIDE",
+          title: "Own Title",
+          artists_text: null,
+          album_title: "Own Album",
+          deleted: 0,
+          ...register,
+        },
+        {
+          user_id: userId,
+          video_id: "vidOVRGONEx",
+          title: null,
+          artists_text: null,
+          album_title: null,
+          deleted: 1,
+          ...register,
+        },
+      ])
+      .execute();
+    await q
+      .insertInto("sync_lyrics_pins")
+      .values([
+        {
+          user_id: userId,
+          video_id: "vidPINNEDxx",
+          source: "lrclib",
+          ref: "123456",
+          start_time_ms: 1500,
+          deleted: 0,
+          ...register,
+        },
+        {
+          user_id: userId,
+          video_id: "vidPINGONEx",
+          source: null,
+          ref: null,
+          start_time_ms: null,
+          deleted: 1,
+          ...register,
+        },
+      ])
+      .execute();
+
     await q
       .insertInto("play_forgets")
       .values({ user_id: userId, video_id: "*", events_before: now, total_before: now, seq: 1 })
@@ -291,7 +339,7 @@ async function seedLibrary(userId: string): Promise<{ included: Record<string, u
 
   return {
     included: { playlistId },
-    excludedVideoIds: ["vidUNLIKEDx", "vidREMOVEDx", "vidFORGOTTx"],
+    excludedVideoIds: ["vidUNLIKEDx", "vidREMOVEDx", "vidFORGOTTx", "vidOVRGONEx", "vidPINGONEx"],
   };
 }
 
@@ -349,6 +397,27 @@ describe("GET /auth/me/export", () => {
       "a removed (present=0) item is excluded",
     );
 
+    assert.deepEqual(doc.library.overrides, [
+      {
+        videoId: "vidOVERRIDE",
+        title: "Own Title",
+        artistsText: null,
+        albumTitle: "Own Album",
+        updatedAt: formatIso(t.clock.now()),
+        deleted: false,
+      },
+    ]);
+    assert.deepEqual(doc.library.lyricsPins, [
+      {
+        videoId: "vidPINNEDxx",
+        source: "lrclib",
+        ref: "123456",
+        startTimeMs: 1500,
+        updatedAt: formatIso(t.clock.now()),
+        deleted: false,
+      },
+    ]);
+
     assert.deepEqual(
       doc.history.plays.map((row) => row.videoId),
       ["vidHISTORYx"],
@@ -382,7 +451,14 @@ describe("GET /auth/me/export", () => {
     const response = await get(account.session.tokens.accessToken);
     assert.equal(response.statusCode, 200, response.body);
     const doc = ExportDocument.parse(json(response));
-    assert.deepEqual(doc.library, { tracks: [], likes: [], bookmarks: [], playlists: [] });
+    assert.deepEqual(doc.library, {
+      tracks: [],
+      likes: [],
+      bookmarks: [],
+      playlists: [],
+      overrides: [],
+      lyricsPins: [],
+    });
     assert.deepEqual(doc.history, { plays: [], playStats: [], playForgets: [] });
     assert.equal(doc.playback, null);
     assert.deepEqual(

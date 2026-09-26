@@ -3,7 +3,8 @@
  *
  * A kind without a handler would be a **stub** answering `deferred unknown_kind`: the op is kept by the client and
  * retried when the server version changes (API §2.3), exactly like a kind this server does not know. Since M2 every
- * kind has its handler (T2.1 `like.set`/`bookmark.set`, T2.2 `playlist.*`, T2.3 `play.*`/`history.*`).
+ * kind has its handler (T2.1 `like.set`/`bookmark.set`, T2.2 `playlist.*`, T2.3 `play.*`/`history.*`); 0.1.1 adds
+ * `track.override.set` and `lyrics.pin.set`.
  */
 import { SYNC_OP_KIND_SPECS, SYNC_OP_KINDS } from "../../../contract/sync.ts";
 import type { SyncOpKind } from "../../../contract/sync.ts";
@@ -11,6 +12,7 @@ import { bookmarkSetHandler } from "./bookmark-set.ts";
 import { historyClearHandler } from "./history-clear.ts";
 import { historyForgetHandler } from "./history-forget.ts";
 import { likeSetHandler } from "./like-set.ts";
+import { lyricsPinSetHandler } from "./lyrics-pin-set.ts";
 import { playAddHandler } from "./play-add.ts";
 import { playBaselineHandler } from "./play-baseline.ts";
 import { playlistCreate } from "./playlist-create.ts";
@@ -21,6 +23,7 @@ import { playlistItemRemove } from "./playlist-item-remove.ts";
 import { playlistItemsAdd } from "./playlist-items-add.ts";
 import { playlistItemsReplace } from "./playlist-items-replace.ts";
 import { playlistUpdate } from "./playlist-update.ts";
+import { trackOverrideSetHandler } from "./track-override-set.ts";
 import { deferred, notParsed } from "./types.ts";
 import type { OpHandler } from "./types.ts";
 
@@ -67,6 +70,8 @@ export const OP_HANDLERS: OpHandlers = buildOpHandlers({
   "play.baseline": playBaselineHandler,
   "history.clear": historyClearHandler,
   "history.forget": historyForgetHandler,
+  "track.override.set": trackOverrideSetHandler,
+  "lyrics.pin.set": lyricsPinSetHandler,
 });
 
 /** The handler of a raw `kind`, or `null` for a kind this server does not know (→ `deferred unknown_kind`). */

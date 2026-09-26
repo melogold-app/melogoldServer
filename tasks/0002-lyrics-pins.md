@@ -1,6 +1,6 @@
 # Закреплённый текст песни: найденный автоматически одинаков на всех устройствах
 
-Статус: открыто — контракт **утверждён пользователем 2026-09-26**; первым шагом внести его в `docs/API.md`, затем код
+Статус: сделано — контракт в `docs/API.md` (§4.8, §4.5, §9.2, §11), сервер 0.1.1; `features.sync.kinds` включает `lyrics.pin.set`
 
 Клиентские задания, которые ждут это: `melogoldWindows/tasks/0012-lyrics-pins.md`,
 `melogoldAndroid/tasks/0013-lyrics-pins.md`, `melogoldiOSmacOS/tasks/0015-lyrics-pins.md`,
@@ -17,6 +17,7 @@
 тем более».
 
 **Решение пользователя (2026-09-26):**
+
 - трек проиграл **30 секунд** (порог записи в историю) с найденным автоматически текстом, и пользователь его не менял —
   устройство **закрепляет** этот текст;
 - на сервере хранится **ссылка** на текст у поставщика, а не сам текст: ~150 байт против ~5 КБ на трек (2 млн
@@ -28,9 +29,9 @@
 
 **Новый вид op** `lyrics.pin.set` (§4.8), поток `library`, `entityKey` = `lpin:<videoId>`, побеждает более поздний `at`:
 
-| kind | Обязательные поля | Необязательные | entityKey |
-|---|---|---|---|
-| `lyrics.pin.set` | `videoId` | `source`, `ref`, `startTimeMs` | `lpin:<videoId>` |
+| kind             | Обязательные поля | Необязательные                 | entityKey        |
+| ---------------- | ----------------- | ------------------------------ | ---------------- |
+| `lyrics.pin.set` | `videoId`         | `source`, `ref`, `startTimeMs` | `lpin:<videoId>` |
 
 - `source` — `youtube_music | lrclib | kugou` (как источники §4.10); `ref` — номер текста у поставщика, ≤ 200 единиц
   UTF-16:
@@ -43,9 +44,16 @@
 - `features.sync.kinds` включает `lyrics.pin.set`.
 
 **Ответ синка:**
+
 ```ts
-type LyricsPinRow = { videoId: VideoId; source: string | null; ref: string | null; startTimeMs: number | null;
-                      updatedAt: Iso; deleted: boolean };
+type LyricsPinRow = {
+  videoId: VideoId;
+  source: string | null;
+  ref: string | null;
+  startTimeMs: number | null;
+  updatedAt: Iso;
+  deleted: boolean;
+};
 // SyncResponse: + lyricsPins: LyricsPinRow[]
 // SyncInclude:  + lyricsPins?: VideoId[]
 ```
@@ -54,6 +62,7 @@ type LyricsPinRow = { videoId: VideoId; source: string | null; ref: string | nul
 `library.lyricsPins` (живые).
 
 **DDL** (новая расширяющая миграция):
+
 ```sql
 CREATE TABLE sync_lyrics_pins (
   user_id       <uuid>   NOT NULL REFERENCES users(id) ON DELETE CASCADE,

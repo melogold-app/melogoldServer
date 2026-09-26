@@ -37,6 +37,7 @@ import {
   VideoIdOut,
 } from "./common.ts";
 import { MERGE_PLAN_LIMITS, STRING_LIMITS, SYNC_LIMITS } from "./limits.ts";
+import { LYRICS_LIMITS } from "./lyrics.ts";
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Values
@@ -57,6 +58,10 @@ export type BookmarkType = (typeof BOOKMARK_TYPE_VALUES)[number];
 /** `play.baseline.mode`. */
 export const BASELINE_MODE_VALUES = ["add", "atLeast"] as const;
 export type BaselineMode = (typeof BASELINE_MODE_VALUES)[number];
+
+/** `lyrics.pin.set.source`: the providers of lyrics found automatically (the provider sources of API §4.10). */
+export const LYRICS_PIN_SOURCE_VALUES = ["youtube_music", "lrclib", "kugou"] as const;
+export type LyricsPinSource = (typeof LYRICS_PIN_SOURCE_VALUES)[number];
 
 /** `PlayForgetRow.videoId` of the whole-history watermark (`history.clear`). */
 export const ALL_VIDEOS = "*";
@@ -98,6 +103,11 @@ export type SyncOpField =
   | "entries"
   | "eventsBefore"
   | "resetTotal"
+  | "artistsText"
+  | "albumTitle"
+  | "source"
+  | "ref"
+  | "startTimeMs"
   | "tracks";
 
 export type SyncOpKindSpec = Readonly<{
@@ -219,6 +229,20 @@ export const SYNC_OP_KIND_SPECS = Object.freeze({
     stream: "history",
     journaled: true,
   },
+  "track.override.set": {
+    required: ["videoId"],
+    optional: ["title", "artistsText", "albumTitle"],
+    entityKey: "ovr:<videoId>",
+    stream: "library",
+    journaled: true,
+  },
+  "lyrics.pin.set": {
+    required: ["videoId"],
+    optional: ["source", "ref", "startTimeMs"],
+    entityKey: "lpin:<videoId>",
+    stream: "library",
+    journaled: true,
+  },
 } as const satisfies Record<string, SyncOpKindSpec>);
 
 export type SyncOpKind = keyof typeof SYNC_OP_KIND_SPECS;
@@ -303,13 +327,17 @@ export const SyncInclude = z
     playlists: optional(z.array(Uuid)),
     bookmarks: optional(z.array(BookmarkKey)),
     playStats: optional(z.array(VideoId)),
+    overrides: optional(z.array(VideoId)),
+    lyricsPins: optional(z.array(VideoId)),
   })
   .superRefine((include, ctx) => {
     const total =
       (include.likes?.length ?? 0) +
       (include.playlists?.length ?? 0) +
       (include.bookmarks?.length ?? 0) +
-      (include.playStats?.length ?? 0);
+      (include.playStats?.length ?? 0) +
+      (include.overrides?.length ?? 0) +
+      (include.lyricsPins?.length ?? 0);
     if (total > SYNC_LIMITS.maxIncludeKeys) {
       ctx.addIssue({
         code: "too_big",
@@ -375,6 +403,16 @@ export const SyncOp = z
     entries: optional(z.array(BaselineEntry).meta({ minItems: 1, maxItems: SYNC_LIMITS.maxBaselineEntries })),
     eventsBefore: optional(Iso.meta({ description: "Inclusive watermark." })),
     resetTotal: optional(z.boolean()),
+    artistsText: optional(z.string().meta({ maxLength: STRING_LIMITS.title })),
+    albumTitle: optional(z.string().meta({ maxLength: STRING_LIMITS.title })),
+    source: optional(z.string().meta({ description: "lyrics.pin.set: youtube_music | lrclib | kugou." })),
+    ref: optional(
+      z.string().meta({
+        maxLength: STRING_LIMITS.lyricsRef,
+        description: "lyrics.pin.set: the id of the lyrics at the provider; empty → the pin is removed.",
+      }),
+    ),
+    startTimeMs: optional(intRange(0, LYRICS_LIMITS.startTimeMaxMs)),
     tracks: optional(z.array(TrackInput).meta({ description: "Metadata of the videoIds the op mentions." })),
   })
   .meta({
@@ -486,6 +524,28 @@ export const BookmarkRow = z
   })
   .meta({ id: "BookmarkRow" });
 
+export const TrackOverrideRow = z
+  .object({
+    videoId: VideoIdOut,
+    title: textOut(STRING_LIMITS.title).nullable(),
+    artistsText: textOut(STRING_LIMITS.title).nullable(),
+    albumTitle: textOut(STRING_LIMITS.title).nullable(),
+    updatedAt: IsoOut,
+    deleted: z.boolean().meta({ description: "`true`: the override was removed (all three fields were empty)." }),
+  })
+  .meta({ id: "TrackOverrideRow", description: "The user's own text over the YouTube metadata of a track." });
+
+export const LyricsPinRow = z
+  .object({
+    videoId: VideoIdOut,
+    source: enumOut(LYRICS_PIN_SOURCE_VALUES).nullable(),
+    ref: textOut(STRING_LIMITS.lyricsRef).nullable(),
+    startTimeMs: IntOut.nullable(),
+    updatedAt: IsoOut,
+    deleted: z.boolean().meta({ description: "`true`: the pin was removed." }),
+  })
+  .meta({ id: "LyricsPinRow", description: "Lyrics found automatically and pinned: a reference to the provider." });
+
 export const PlayRow = z
   .object({
     eventId: UuidOut,
@@ -519,6 +579,8 @@ export const SyncResponse = z
     items: z.array(PlaylistItemRow),
     likes: z.array(LikeRow),
     bookmarks: z.array(BookmarkRow),
+    overrides: z.array(TrackOverrideRow),
+    lyricsPins: z.array(LyricsPinRow),
     plays: z.array(PlayRow),
     playStats: z.array(PlayStatRow),
     playForgets: z.array(PlayForgetRow),
@@ -526,7 +588,7 @@ export const SyncResponse = z
   .meta({
     id: "SyncResponse",
     description:
-      "Every row key appears once, as its full current image. Apply: tracks → playlists (by createdAt) → items → likes → bookmarks → playStats → plays → playForgets.",
+      "Every row key appears once, as its full current image. Apply: tracks → playlists (by createdAt) → items → likes → bookmarks → overrides → lyricsPins → playStats → plays → playForgets.",
   });
 
 export type SyncSummary = z.output<typeof SyncSummary>;
@@ -546,6 +608,8 @@ export type PlaylistRow = z.output<typeof PlaylistRow>;
 export type PlaylistItemRow = z.output<typeof PlaylistItemRow>;
 export type LikeRow = z.output<typeof LikeRow>;
 export type BookmarkRow = z.output<typeof BookmarkRow>;
+export type TrackOverrideRow = z.output<typeof TrackOverrideRow>;
+export type LyricsPinRow = z.output<typeof LyricsPinRow>;
 export type PlayRow = z.output<typeof PlayRow>;
 export type PlayStatRow = z.output<typeof PlayStatRow>;
 export type PlayForgetRow = z.output<typeof PlayForgetRow>;

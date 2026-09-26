@@ -124,6 +124,7 @@ import {
   BookmarkKey,
   BookmarkRow,
   LikeRow,
+  LyricsPinRow,
   MergePlanEntry,
   MergePlanInput,
   MergePlanRequest,
@@ -140,6 +141,7 @@ import {
   SyncResponse,
   SyncSummary,
   SyncSummaryCounts,
+  TrackOverrideRow,
 } from "./sync.ts";
 
 export * from "./account.ts";
@@ -255,6 +257,8 @@ const RESPONSE_SCHEMAS: readonly z.ZodType[] = [
   PlaylistItemRow,
   LikeRow,
   BookmarkRow,
+  TrackOverrideRow,
+  LyricsPinRow,
   PlayRow,
   PlayStatRow,
   PlayForgetRow,

@@ -98,6 +98,10 @@ export type TouchedKeys = Readonly<{
   playStats: Set<string>;
   /** videoIds or `"*"`. */
   playForgets: Set<string>;
+  /** videoIds of `track.override.set`. */
+  overrides: Set<string>;
+  /** videoIds of `lyrics.pin.set`. */
+  lyricsPins: Set<string>;
 }>;
 
 /**
@@ -205,6 +209,8 @@ export function newTouchedKeys(): TouchedKeys {
     items: new Set<string>(),
     playStats: new Set<string>(),
     playForgets: new Set<string>(),
+    overrides: new Set<string>(),
+    lyricsPins: new Set<string>(),
   });
 }
 
