@@ -89,7 +89,13 @@ describe("startServer", () => {
       const response = await fetch(`http://127.0.0.1:${port}/health`);
       assert.equal(response.status, 200);
       assert.deepEqual(await response.json(), { status: "ok", version: "0.0.0-dev", db: database.dialect });
-      assert.deepEqual(running.scheduler.names(), ["disk-guard"]);
+      assert.deepEqual(running.scheduler.names(), [
+        "retention",
+        "auth-cleanup",
+        "account-purge",
+        ...(database.dialect === "sqlite" ? ["sqlite-maintenance"] : []),
+        "disk-guard",
+      ]);
     } finally {
       await running.shutdown();
       await running.shutdown();
