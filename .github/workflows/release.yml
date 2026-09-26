@@ -1,0 +1,205 @@
+# Release (PLAN T3.3, DESIGN §7) on a tag vX.Y.Z or vX.Y.Z-rc.N:
+# 1. the tag must equal the version of package.json;
+# 2. the image per architecture on native runners, pushed by digest to ghcr.io/melogold-app/melogold-server;
+# 3. one multi-arch manifest tagged X.Y.Z, plus X.Y and latest for a final release;
+# 4. the installer end to end against the published image (both databases);
+# 5. the GitHub release: install.sh, openapi.json, openapi.yaml, error-codes.json, SHA256SUMS and SHA256SUMS.minisig.
+#    The signature needs the MINISIGN_SECRET_KEY secret (the key file of `minisign -G -W`); without it the release is
+#    published unsigned with a warning, and upgrades fall back to the checksum.
+# Only checkout and setup-node are actions (pinned to full SHAs, like ci.yml); the rest is docker, buildx and gh.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REPO_IMAGE: ghcr.io/melogold-app/melogold-server
+
+jobs:
+  version:
+    name: version matches the tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: check
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          pkg=$(node -p 'require("./package.json").version')
+          if [ "$tag" != "$pkg" ]; then echo "::error::tag v$tag, but package.json says $pkg"; exit 1; fi
+          case $tag in *-*) pre=true ;; *) pre=false ;; esac
+          echo "version=$tag" >>"$GITHUB_OUTPUT"
+          echo "prerelease=$pre" >>"$GITHUB_OUTPUT"
+
+  image-amd64:
+    name: image (amd64)
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and push by digest
+        id: push
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx create --use >/dev/null
+          docker buildx build --pull --platform linux/amd64 \
+            --build-arg APP_VERSION="$VERSION" --build-arg GIT_SHA="$GITHUB_SHA" \
+            --output "type=image,name=$REPO_IMAGE,push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file meta.json .
+          echo "digest=$(jq -r '."containerimage.digest"' meta.json)" >>"$GITHUB_OUTPUT"
+
+  image-arm64:
+    name: image (arm64)
+    needs: version
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and push by digest
+        id: push
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx create --use >/dev/null
+          docker buildx build --pull --platform linux/arm64 \
+            --build-arg APP_VERSION="$VERSION" --build-arg GIT_SHA="$GITHUB_SHA" \
+            --output "type=image,name=$REPO_IMAGE,push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file meta.json .
+          echo "digest=$(jq -r '."containerimage.digest"' meta.json)" >>"$GITHUB_OUTPUT"
+
+  manifest:
+    name: multi-arch manifest
+    needs: [version, image-amd64, image-arm64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Tag the manifest
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          AMD64: ${{ needs.image-amd64.outputs.digest }}
+          ARM64: ${{ needs.image-arm64.outputs.digest }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          set -- -t "$REPO_IMAGE:$VERSION"
+          if [ "$PRERELEASE" = false ]; then set -- "$@" -t "$REPO_IMAGE:${VERSION%.*}" -t "$REPO_IMAGE:latest"; fi
+          docker buildx imagetools create "$@" "$REPO_IMAGE@$AMD64" "$REPO_IMAGE@$ARM64"
+          docker buildx imagetools inspect "$REPO_IMAGE:$VERSION"
+      - name: The image pulls anonymously
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          docker logout ghcr.io || true
+          docker pull "$REPO_IMAGE:$VERSION"
+
+  e2e:
+    name: installer e2e on the published image (${{ matrix.db }})
+    needs: [version, manifest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        db: [sqlite, postgres]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tools
+        run: command -v jq >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q jq; }
+      - name: install.sh of this version, end to end
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          deploy/installer/build.sh "$VERSION" dist
+          sudo scripts/e2e-installer.sh "$REPO_IMAGE:$VERSION" dist/install.sh "${{ matrix.db }}"
+
+  release:
+    name: GitHub release
+    needs: [version, e2e]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: The committed contract is current
+        run: npm run openapi:check
+      - name: Assets and checksums
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          deploy/installer/build.sh "$VERSION" dist
+          rm -f dist/melogold
+          cp openapi/openapi.json openapi/openapi.yaml dist/
+          cp spec/error-codes.json dist/error-codes.json
+          (cd dist && sha256sum install.sh openapi.json openapi.yaml error-codes.json >SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Sign SHA256SUMS (minisign)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          if [ -z "$MINISIGN_SECRET_KEY" ]; then
+            echo "::warning::MINISIGN_SECRET_KEY is not set: the release is not signed"
+            exit 0
+          fi
+          sudo apt-get update -q && sudo apt-get install -y -q minisign
+          key=$(mktemp)
+          printf '%s\n' "$MINISIGN_SECRET_KEY" >"$key"
+          minisign -S -s "$key" -m dist/SHA256SUMS -x dist/SHA256SUMS.minisig \
+            -t "timestamp:$(date +%s)	file:SHA256SUMS	version:$VERSION	hashed" </dev/null
+          rm -f "$key"
+      - name: Publish
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -- --verify-tag --title "Melogold server $VERSION" --generate-notes
+          if [ "$PRERELEASE" = true ]; then set -- "$@" --prerelease; fi
+          gh release create "v$VERSION" "$@" dist/*

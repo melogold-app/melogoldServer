@@ -1,0 +1,111 @@
+# Melogold server (DESIGN §7.2). Managed by install.sh and the `melogold` command: an upgrade replaces this file.
+# Your own changes go to compose.override.yaml next to it, which is never touched.
+#
+# Profiles: `caddy` (mode domain: HTTPS with automatic certificates), `postgres` (--db postgres). The values come
+# from .env next to this file.
+name: melogold
+
+services:
+  app:
+    image: ${MELOGOLD_IMAGE:?MELOGOLD_IMAGE is not set in .env}
+    labels:
+      app.melogold.compose-schema: "1"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    volumes:
+      - data:/data
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    mem_limit: ${APP_MEM_LIMIT:-512m}
+    oom_score_adj: 300
+    stop_grace_period: 20s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+    environment:
+      NODE_OPTIONS: --max-old-space-size=${APP_HEAP_MB:-192}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///data/melogold.db}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      INSTANCE_NAME: ${INSTANCE_NAME:-Melogold}
+      REGISTRATION: ${REGISTRATION:-first}
+      REGISTRATION_POW_BITS: ${REGISTRATION_POW_BITS:-0}
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      LINK_NETWORK_HINT: ${LINK_NETWORK_HINT:-true}
+      ARGON2_MAX_CONCURRENCY: ${ARGON2_MAX_CONCURRENCY:-2}
+      PRIVACY_URL: ${PRIVACY_URL:-}
+      CONTACT: ${CONTACT:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+
+  postgres:
+    profiles: [postgres]
+    image: postgres:18-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: melogold
+      POSTGRES_DB: melogold
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-384MB}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    mem_limit: ${PG_MEM_LIMIT:-512m}
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U melogold -d melogold"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  caddy:
+    profiles: [caddy]
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      SITE: ${SITE:-}
+      APP_PORT: ${APP_PORT:-8080}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy.d:/etc/caddy/Caddyfile.d:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 128m
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${MELOGOLD_SUBNET:-172.30.83.0/24}
+
+volumes:
+  data:
+  pgdata:
+  caddy_data:
+  caddy_config:

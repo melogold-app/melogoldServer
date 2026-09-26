@@ -1,0 +1,26 @@
+# Melogold behind Caddy, mode domain (DESIGN §7.2). Managed by install.sh: an upgrade replaces this file.
+# Extra site blocks go to caddy.d/*.caddy next to it.
+{
+	admin off
+}
+
+{$SITE} {
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type application/json*
+		}
+	}
+	# 5 MiB, not 4 MB: 4 MB is 4 000 000 bytes, less than the largest /sync body (m11).
+	request_body {
+		max_size 5MiB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:{$APP_PORT}
+}
+
+import Caddyfile.d/*.caddy
