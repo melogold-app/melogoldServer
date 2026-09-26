@@ -83,7 +83,9 @@ function required(value: string | undefined, what: string): string {
   return value;
 }
 
-type Run = (env: Env, output: CliOutput, runtime: OpenRuntimeOptions, prompter: Prompter) => Promise<number>;
+type Io = Readonly<{ prompter: Prompter; stdin: NodeJS.ReadableStream }>;
+
+type Run = (env: Env, output: CliOutput, runtime: OpenRuntimeOptions, io: Io) => Promise<number>;
 
 /** `user <sub> …`. */
 function resolveUser(sub: string | undefined, args: readonly string[]): Readonly<{ run: Run; verbose: boolean }> {
@@ -95,10 +97,10 @@ function resolveUser(sub: string | undefined, args: readonly string[]): Readonly
       const input = { login: required(parsed.positionals[0], "login"), generate: parsed.flag("generate-password") };
       return {
         verbose: parsed.flag("verbose"),
-        run: async (env, output, runtime, prompter) =>
+        run: async (env, output, runtime, io) =>
           sub === "add"
-            ? (await user()).userAddCommand(env, output, runtime, prompter, input)
-            : (await user()).userResetPasswordCommand(env, output, runtime, prompter, input),
+            ? (await user()).userAddCommand(env, output, runtime, io.prompter, input)
+            : (await user()).userResetPasswordCommand(env, output, runtime, io.prompter, input),
       };
     }
     case "delete": {
@@ -106,8 +108,8 @@ function resolveUser(sub: string | undefined, args: readonly string[]): Readonly
       const input = { login: required(parsed.positionals[0], "login"), yes: parsed.flag("yes") };
       return {
         verbose: parsed.flag("verbose"),
-        run: async (env, output, runtime, prompter) =>
-          (await user()).userDeleteCommand(env, output, runtime, prompter, input),
+        run: async (env, output, runtime, io) =>
+          (await user()).userDeleteCommand(env, output, runtime, io.prompter, input),
       };
     }
     case "list": {
@@ -212,6 +214,54 @@ function resolve(argv: readonly string[]): Readonly<{ run: Run; verbose: boolean
     }
     case "user":
       return resolveUser(sub, rest);
+    case "backup": {
+      const args = plain(words(1), { out: { type: "string" } }, 0);
+      const out = required(args.value("out"), "--out <file|->");
+      return {
+        verbose: args.flag("verbose"),
+        run: async (env, output, runtime) => (await import("./backup.ts")).backupCommand(env, output, runtime, out),
+      };
+    }
+    case "restore": {
+      const args = plain(words(1), { from: { type: "string" }, yes: { type: "boolean" } }, 0);
+      const from = required(args.value("from"), "--from <file|->");
+      return {
+        verbose: args.flag("verbose"),
+        run: async (env, output, runtime, io) =>
+          (await import("./backup.ts")).restoreCommand(env, output, runtime, io.prompter, {
+            from,
+            yes: args.flag("yes"),
+            stdin: io.stdin,
+          }),
+      };
+    }
+    case "verify-backup": {
+      const args = plain(words(1), { from: { type: "string" }, json: { type: "boolean" } }, 0);
+      const from = required(args.value("from"), "--from <file|->");
+      return {
+        verbose: args.flag("verbose"),
+        run: async (env, output, runtime, io) =>
+          (await import("./backup.ts")).verifyBackupCommand(env, output, runtime, {
+            from,
+            json: args.flag("json"),
+            stdin: io.stdin,
+          }),
+      };
+    }
+    case "sync": {
+      if (sub !== "rotate-epoch") throw new UsageError("usage: melogold sync rotate-epoch --all|<login>");
+      const args = plain(rest, { all: { type: "boolean" } }, 1);
+      const login = args.positionals[0];
+      if (args.flag("all") === (login !== undefined)) {
+        throw new UsageError("usage: melogold sync rotate-epoch --all|<login> (exactly one)");
+      }
+      const target = login === undefined ? ({ all: true } as const) : { login };
+      return {
+        verbose: args.flag("verbose"),
+        run: async (env, output, runtime) =>
+          (await import("./backup.ts")).rotateEpochCommand(env, output, runtime, target),
+      };
+    }
     default:
       throw new UsageError(`unknown command "${argv.join(" ")}"`);
   }
@@ -222,6 +272,8 @@ export type RunCliOptions = Readonly<{
   env?: Env;
   /** Where passwords and confirmations are read (tests); default: the terminal. */
   prompter?: Prompter;
+  /** What `--from -` reads (tests); default: the process's stdin. */
+  stdin?: NodeJS.ReadableStream;
 }>;
 
 /** Runs one CLI command and returns the exit code. */
@@ -244,8 +296,8 @@ export async function runCli(
     }
     const resolved = resolve(argv);
     env = options.env ?? loadEnv();
-    const prompter = options.prompter ?? terminalPrompter(output);
-    return await resolved.run(env, output, { log: stderrLogger(output, resolved.verbose) }, prompter);
+    const io = { prompter: options.prompter ?? terminalPrompter(output), stdin: options.stdin ?? process.stdin };
+    return await resolved.run(env, output, { log: stderrLogger(output, resolved.verbose) }, io);
   } catch (error) {
     if (error instanceof UsageError) {
       output.err(`melogold: ${error.message}\n\n${usage()}`);

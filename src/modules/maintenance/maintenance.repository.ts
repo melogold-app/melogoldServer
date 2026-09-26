@@ -120,3 +120,43 @@ export async function countDevices(q: Queryable): Promise<number> {
     .executeTakeFirstOrThrow();
   return Number(row.count);
 }
+
+/** SQLite: a consistent copy of the database into a new file (`VACUUM INTO`, docs/database.md "Копия базы"). */
+export async function vacuumIntoSqlite(q: Queryable, file: string): Promise<void> {
+  await sql`VACUUM INTO ${file}`.execute(q);
+}
+
+/** SQLite: `PRAGMA integrity_check`; `[]` when the database is sound, otherwise the problems it reports. */
+export async function integrityProblemsSqlite(q: Queryable): Promise<string[]> {
+  const result = await sql<{ integrity_check: string }>`PRAGMA integrity_check`.execute(q);
+  const lines = result.rows.map((row) => row.integrity_check);
+  return lines.length === 1 && lines[0] === "ok" ? [] : lines;
+}
+
+/** Rows of the main tables, for `verify-backup`. */
+export type TableCounts = Readonly<{
+  users: number;
+  devices: number;
+  likes: number;
+  playlists: number;
+  playEvents: number;
+  lyrics: number;
+}>;
+
+export async function tableCounts(q: Queryable): Promise<TableCounts> {
+  const count = async (table: "users" | "devices" | "sync_likes" | "sync_playlists" | "play_events" | "lyrics") => {
+    const row = await q
+      .selectFrom(table)
+      .select((eb) => eb.fn.countAll<number | string>().as("count"))
+      .executeTakeFirstOrThrow();
+    return Number(row.count);
+  };
+  return Object.freeze({
+    users: await count("users"),
+    devices: await count("devices"),
+    likes: await count("sync_likes"),
+    playlists: await count("sync_playlists"),
+    playEvents: await count("play_events"),
+    lyrics: await count("lyrics"),
+  });
+}

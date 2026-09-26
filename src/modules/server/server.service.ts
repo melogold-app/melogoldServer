@@ -16,7 +16,7 @@ import type { HealthResponse, ServerInfo } from "../../contract/server.ts";
 import { SOFTWARE_NAME } from "../../contract/server.ts";
 import { buildServerLimits } from "../../contract/limits.ts";
 import type { Db } from "../../db/index.ts";
-import { newEpoch } from "../../db/heads.ts";
+import { lockUser, newEpoch } from "../../db/heads.ts";
 import { AppError } from "../../http/errors.ts";
 import { DAY_MS } from "../../lib/clock.ts";
 import { isUuid, newId } from "../../lib/ids.ts";
@@ -117,6 +117,17 @@ export async function isRestorePending(db: Pick<Db, "read">): Promise<boolean> {
  */
 export async function markRestorePending(db: Pick<Db, "write">): Promise<void> {
   await db.write((q) => upsertMeta(q, META_RESTORE_PENDING, "1"));
+}
+
+/**
+ * Gives one user a new cursor epoch now (`melogold sync rotate-epoch <login>`): every cursor of the user becomes
+ * `410 cursor_invalid` and the devices merge silently (DESIGN §3.14).
+ */
+export async function rotateUserEpoch(db: Pick<Db, "write">, userId: string, now: number): Promise<void> {
+  await db.write(async (q) => {
+    await lockUser(q, userId);
+    await setHeadEpoch(q, userId, newEpoch(), now);
+  });
 }
 
 function unavailable(): AppError<"unavailable"> {
