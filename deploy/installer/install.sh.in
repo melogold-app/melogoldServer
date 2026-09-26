@@ -449,14 +449,16 @@ pull_image() {
 		case $image_version in @*) md "this installer has no version: pass --version X" "у этого установщика нет версии: укажите --version X" ;; esac
 		image_ref="$MELOGOLD_IMAGE_REPO:$image_version"
 	fi
-	if ! docker pull "$image_ref"; then
+	MELOGOLD_IMAGE=$image_ref
+	if docker pull "$image_ref"; then
+		# Pinned to the digest the registry served (DESIGN §7.3 step 10).
+		image_digest=$(docker image inspect -f '{{index .RepoDigests 0}}' "$image_ref" 2>/dev/null | sed -n 's/.*@//p')
+		case $image_ref in *@*) ;; *) [ -z "$image_digest" ] || MELOGOLD_IMAGE="$image_ref@$image_digest" ;; esac
+	else
 		# A locally built image (tests, air-gapped hosts) is used as it is, without a digest.
 		docker image inspect "$image_ref" >/dev/null 2>&1 || md "cannot pull $image_ref" "не удалось скачать $image_ref"
 		mw "using the local image $image_ref" "использую локальный образ $image_ref"
 	fi
-	image_digest=$(docker image inspect -f '{{index .RepoDigests 0}}' "$image_ref" 2>/dev/null | sed -n 's/.*@//p')
-	MELOGOLD_IMAGE=$image_ref
-	case $image_ref in *@*) ;; *) [ -z "$image_digest" ] || MELOGOLD_IMAGE="$image_ref@$image_digest" ;; esac
 	m "$MELOGOLD_IMAGE" "$MELOGOLD_IMAGE"
 }
 

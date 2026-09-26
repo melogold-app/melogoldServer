@@ -458,13 +458,15 @@ cmd_upgrade() {
 	fi
 	compose config -q || die "the new compose.yaml does not validate with your .env (melogold rollback)"
 
-	if ! docker pull "$upgrade_ref"; then
-		docker image inspect "$upgrade_ref" >/dev/null 2>&1 || die "cannot pull $upgrade_ref"
-		warn "using the local image $upgrade_ref"
-	fi
-	upgrade_digest=$(docker image inspect -f '{{index .RepoDigests 0}}' "$upgrade_ref" 2>/dev/null | sed -n 's/.*@//p')
 	upgrade_pinned=$upgrade_ref
-	case $upgrade_ref in *@*) ;; *) [ -z "$upgrade_digest" ] || upgrade_pinned="$upgrade_ref@$upgrade_digest" ;; esac
+	if docker pull "$upgrade_ref"; then
+		# Pinned to the digest the registry served, so a moved tag never changes what runs here.
+		upgrade_digest=$(docker image inspect -f '{{index .RepoDigests 0}}' "$upgrade_ref" 2>/dev/null | sed -n 's/.*@//p')
+		case $upgrade_ref in *@*) ;; *) [ -z "$upgrade_digest" ] || upgrade_pinned="$upgrade_ref@$upgrade_digest" ;; esac
+	else
+		docker image inspect "$upgrade_ref" >/dev/null 2>&1 || die "cannot pull $upgrade_ref"
+		warn "using the local image $upgrade_ref as it is"
+	fi
 	upgrade_schema=$(docker image inspect -f '{{index .Config.Labels "app.melogold.compose-schema"}}' "$upgrade_ref")
 	[ "$upgrade_schema" = 1 ] || die "$upgrade_ref needs compose schema $upgrade_schema; this installation has 1"
 
