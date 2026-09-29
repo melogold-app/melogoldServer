@@ -27,6 +27,7 @@ import {
 } from "./common.ts";
 import { STRING_LIMITS } from "./limits.ts";
 import { PlaybackState } from "./playback.ts";
+import { ShareDto } from "./shares.ts";
 import { BookmarkRow, LikeRow, LyricsPinRow, PlayForgetRow, PlayRow, PlayStatRow, TrackOverrideRow } from "./sync.ts";
 
 export const ChangePasswordRequest = z
@@ -128,6 +129,7 @@ export const ExportDocument = z
     library: ExportLibrary,
     history: ExportHistory,
     playback: PlaybackState.nullable(),
+    shares: z.array(ShareDto).meta({ description: "Own snapshots (API §4.11)." }),
   })
   .meta({
     id: "ExportDocument",

@@ -349,6 +349,7 @@ export const ErrorResponse = z
     minProtocol: IntOut.optional(),
     maxProtocol: IntOut.optional(),
     floorCursor: CursorOut.optional(),
+    maxShares: IntOut.optional(),
   })
   .meta({
     id: "ErrorResponse",

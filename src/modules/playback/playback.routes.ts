@@ -9,13 +9,16 @@ import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { AppContext } from "../../context.ts";
 import { PlaybackPut, PlaybackPutResult, PlaybackStateResponse } from "../../contract/playback.ts";
+import { RemoteCommand, RemoteCommandResult, RemoteDeviceList } from "../../contract/remote.ts";
 import { requireAuth } from "../../http/auth-guard.ts";
 import { operation } from "../../http/operation.ts";
 import { FEATURE_V1 } from "../server/features.ts";
 import { clearPlaybackState, getPlaybackState, putPlaybackState } from "./playback.service.ts";
+import { listRemoteDevices, sendRemoteCommand } from "./remote.service.ts";
 
 export function registerPlaybackRoutes(app: FastifyInstance, ctx: AppContext): void {
   ctx.features.declare("playback", FEATURE_V1);
+  ctx.features.declare("remote", FEATURE_V1);
   const routes = app.withTypeProvider<ZodTypeProvider>();
 
   routes.get(
@@ -66,6 +69,45 @@ export function registerPlaybackRoutes(app: FastifyInstance, ctx: AppContext): v
     async (request, reply) => {
       await clearPlaybackState(ctx, requireAuth(request));
       return reply.code(204).send();
+    },
+  );
+
+  routes.get(
+    "/playback/devices",
+    {
+      schema: operation("GET", "/playback/devices", {
+        operationId: "listRemoteDevices",
+        tag: "playback",
+        summary: "The other devices of the account, for the remote control",
+        description:
+          "online and controllable come from the open SSE streams (remote=1); playing and volume from the current " +
+          "playback state when the device is its author (API §4.9).",
+        status: 200,
+        response: RemoteDeviceList,
+      }),
+    },
+    (request) => listRemoteDevices(ctx, requireAuth(request)),
+  );
+
+  routes.post(
+    "/playback/commands",
+    {
+      schema: operation("POST", "/playback/commands", {
+        operationId: "sendRemoteCommand",
+        tag: "playback",
+        summary: "Send a playback command to another device",
+        description:
+          "Delivered as SSE playback.command to the target's remote=1 streams, never stored; the target reports the " +
+          "result by PUT /playback/state. A repeated commandId within 60 s answers the same (API §4.9).",
+        body: RemoteCommand,
+        status: 202,
+        response: RemoteCommandResult,
+        errors: ["device_not_found", "device_offline", "remote_control_disabled"],
+      }),
+    },
+    async (request, reply) => {
+      const result = await sendRemoteCommand(ctx, requireAuth(request), request.body);
+      return reply.code(202).send(result);
     },
   );
 }

@@ -113,6 +113,8 @@ const ALL_FEATURES = {
   export: FEATURE_V1,
   accountDeletion: FEATURE_V1,
   lyrics: FEATURE_V1,
+  share: FEATURE_V1,
+  remote: FEATURE_V1,
 };
 
 describe("GET /server/info (API §4.2)", () => {

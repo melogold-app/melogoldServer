@@ -212,6 +212,7 @@ export type PlaybackStateTable = {
   handoff_device_id: string | null; // ID
   handoff_session_id: string | null; // ID
   handoff_at: number | null; // TS
+  volume: number | null; // INT
 };
 
 export type PlayEventsTable = {
@@ -286,6 +287,15 @@ export type SyncLyricsPinsTable = {
   clk_dev: string | null; // ID
 };
 
+export type SharesTable = {
+  id: string; // ID
+  user_id: string; // ID
+  kind: string; // TXT
+  name: string; // TXT
+  tracks: string; // JSON
+  created_at: number; // TS
+};
+
 export type Database = {
   server_meta: ServerMetaTable;
   users: UsersTable;
@@ -307,4 +317,5 @@ export type Database = {
   lyrics: LyricsTable;
   sync_track_overrides: SyncTrackOverridesTable;
   sync_lyrics_pins: SyncLyricsPinsTable;
+  shares: SharesTable;
 };

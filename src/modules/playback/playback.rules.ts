@@ -12,6 +12,7 @@
  *                                                                                       → queue_required
  *    queue omitted and reused, but index >= the reused queue's length                  → invalid_index
  * 4. rev = max((s?.rev ?? 0) + 1, now); handoff = req.handoffFrom ?? (s alive && s.deviceId == me ? s.handoff : null)
+ *    volume = req.volume ?? (s alive && s.deviceId == me ? s.volume : null)                 (API §4.9, remote control)
  * ```
  */
 import type { TrackDto } from "../../contract/common.ts";
@@ -35,6 +36,8 @@ export type StoredPlayback = Readonly<{
   handoffDeviceId: string | null;
   handoffSessionId: string | null;
   handoffAt: number | null;
+  /** 0..100 as the author's device reported it (API §4.9 remote control); `null` when never reported. */
+  volume: number | null;
 }>;
 
 export type HandoffTriple = Readonly<{
@@ -57,6 +60,7 @@ export type NewPlaybackRow = Readonly<{
   playing: boolean;
   stateAt: number;
   updatedAt: number;
+  volume: number | null;
 }> &
   HandoffTriple;
 
@@ -76,6 +80,8 @@ export type PutInput = Readonly<{
   /** Already cleaned (DESIGN §3.9) by `playback.tracks.ts`; `undefined` when the client omitted `queue`. */
   queue?: readonly TrackDto[];
   handoffFrom?: Readonly<{ deviceId: string; sessionId: string }>;
+  /** 0..100; `undefined`: not reported in this PUT (the author's last value is kept). */
+  volume?: number;
 }>;
 
 export type PutDecision =
@@ -128,6 +134,9 @@ function isSignificant(prev: StoredPlayback | null, next: NewPlaybackRow, effAt:
   ) {
     return true;
   }
+  // Remote control (API §4.9): a volume change of 5 or more is worth telling the remotes
+  if (next.volume !== null && (prevActive.volume === null || Math.abs(next.volume - prevActive.volume) >= 5))
+    return true;
   const elapsed = prevActive.playing ? Math.max(0, effAt - prevActive.stateAt) : 0;
   const extrapolated = prevActive.positionMs + elapsed;
   return Math.abs(next.positionMs - extrapolated) > 10_000;
@@ -177,6 +186,7 @@ export function decidePlaybackPut(stored: StoredPlayback | null, input: PutInput
     playing: input.playing,
     stateAt: effAt,
     updatedAt: nowMs,
+    volume: input.volume ?? (active !== null && active.deviceId === input.deviceId ? active.volume : null),
     ...handoff,
   };
   return { type: "write", row, significant: isSignificant(stored, row, effAt) };
@@ -204,6 +214,7 @@ export function decidePlaybackDelete(stored: StoredPlayback | null, input: Delet
     playing: false,
     stateAt: stored?.stateAt ?? nowMs,
     updatedAt: nowMs,
+    volume: null,
     handoffDeviceId: null,
     handoffSessionId: null,
     handoffAt: null,

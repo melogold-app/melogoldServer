@@ -240,14 +240,14 @@ class SseClient {
   static open(
     port: number,
     token: string | null,
-    options: Readonly<{ headers?: Record<string, string>; method?: "GET" | "HEAD" }> = {},
+    options: Readonly<{ headers?: Record<string, string>; method?: "GET" | "HEAD"; query?: string }> = {},
   ): Promise<SseClient> {
     return new Promise((resolve, reject) => {
       const request = http.request(
         {
           host: "127.0.0.1",
           port,
-          path: "/auth/me/events",
+          path: `/auth/me/events${options.query ?? ""}`,
           method: options.method ?? "GET",
           agent: false,
           headers: { ...(token === null ? {} : { authorization: `Bearer ${token}` }), ...options.headers },
@@ -262,8 +262,8 @@ class SseClient {
   }
 
   /** Opens a stream and waits for `system.connected`. */
-  static async connect(port: number, token: string): Promise<SseClient> {
-    const client = await SseClient.open(port, token);
+  static async connect(port: number, token: string, query?: string): Promise<SseClient> {
+    const client = await SseClient.open(port, token, query === undefined ? {} : { query });
     assert.equal(client.response.statusCode, 200, client.text);
     await client.waitFor(() => client.events().length >= 1, "system.connected");
     return client;
@@ -579,6 +579,74 @@ describe("GET /auth/me/events: coalescing", () => {
     t.timers.fire(COALESCE_MS);
     assert.deepEqual(author.types(), ["system.connected"]);
     await closeClients(t, [author, listener]);
+  });
+});
+
+describe("GET /auth/me/events?remote=1: remote control (API §4.9, §6)", () => {
+  test("playback.command reaches only the target's remote=1 stream; presence follows the streams", async () => {
+    const account = await newAccount();
+    const laptop = await secondDevice(account);
+    const remote = await SseClient.connect(t.port, laptop.token, "?remote=1");
+    const plain = await SseClient.connect(t.port, laptop.token, "?remote=0");
+    const phone = await SseClient.connect(t.port, account.session.tokens.accessToken);
+    const headers = {
+      authorization: `Bearer ${account.session.tokens.accessToken}`,
+      "x-sync-protocol": "1",
+      "content-type": "application/json",
+    };
+    const listed = await t.app.inject({ method: "GET", url: "/playback/devices", headers });
+    const devices = (
+      JSON.parse(listed.body) as { devices: { deviceId: string; online: boolean; controllable: boolean }[] }
+    ).devices;
+    assert.deepEqual(devices, [{ ...devices[0], deviceId: laptop.device.id, online: true, controllable: true }]);
+
+    const sent = await t.app.inject({
+      method: "POST",
+      url: "/playback/commands",
+      headers,
+      payload: JSON.stringify({
+        commandId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+        targetDeviceId: laptop.device.id,
+        action: "volume",
+        volume: 30,
+      }),
+    });
+    assert.equal(sent.statusCode, 202, sent.body);
+    assert.deepEqual(JSON.parse(sent.body), { delivered: true });
+    await remote.waitFor(() => remote.events().length === 2, "playback.command");
+    const received = remote.events()[1];
+    assert.equal(received?.type, "playback.command");
+    assert.deepEqual(
+      { action: received.payload?.action, volume: received.payload?.volume, from: received.payload?.fromDeviceId },
+      { action: "volume", volume: 30, from: account.device.id },
+    );
+    assert.deepEqual(plain.types(), ["system.connected"]);
+    assert.deepEqual(phone.types(), ["system.connected"]);
+
+    remote.destroy();
+    await until(() => t.ctx.live.count() === 2, "the remote stream forgotten");
+    const disabled = await t.app.inject({
+      method: "POST",
+      url: "/playback/commands",
+      headers,
+      payload: JSON.stringify({
+        commandId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        targetDeviceId: laptop.device.id,
+        action: "pause",
+      }),
+    });
+    assert.equal(disabled.statusCode, 409);
+    assert.equal((JSON.parse(disabled.body) as { code: string }).code, "remote_control_disabled");
+    await closeClients(t, [plain, phone]);
+  });
+
+  test("remote other than 0 or 1 → 400 before streaming", async () => {
+    const account = await newAccount();
+    const client = await SseClient.open(t.port, account.session.tokens.accessToken, { query: "?remote=yes" });
+    await client.waitForEnd();
+    assert.equal(client.response.statusCode, 400);
+    assert.equal((JSON.parse(client.text) as { code: string }).code, "invalid_request");
+    assert.equal(t.ctx.live.count(), 0);
   });
 });
 

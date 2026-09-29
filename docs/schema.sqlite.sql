@@ -372,3 +372,18 @@ CREATE TABLE sync_lyrics_pins (
 ) STRICT;
 
 CREATE INDEX sync_lyrics_pins_pull ON sync_lyrics_pins (user_id, seq);
+
+-- ===== 0008_shares_remote ====================================================
+
+CREATE TABLE shares (
+  id         TEXT NOT NULL PRIMARY KEY CHECK (length(id) = 10),
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  tracks     TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+) STRICT;
+
+CREATE INDEX shares_user ON shares (user_id, created_at);
+
+ALTER TABLE playback_state ADD COLUMN volume INTEGER NULL;

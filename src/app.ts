@@ -30,6 +30,7 @@ import { registerLiveRoutes } from "./modules/live/live.routes.ts";
 import { registerLyricsRoutes } from "./modules/lyrics/lyrics.routes.ts";
 import { registerPlaybackRoutes } from "./modules/playback/playback.routes.ts";
 import { registerServerRoutes } from "./modules/server/server.routes.ts";
+import { registerSharesRoutes } from "./modules/shares/shares.routes.ts";
 import { registerSyncRoutes } from "./modules/sync/sync.routes.ts";
 
 /** A route module: registers its routes on an encapsulated child of the application. */
@@ -46,6 +47,7 @@ export const ROUTE_MODULES: readonly Readonly<{ name: string; register: RouteMod
   { name: "sync", register: registerSyncRoutes },
   { name: "playback", register: registerPlaybackRoutes },
   { name: "lyrics", register: registerLyricsRoutes },
+  { name: "shares", register: registerSharesRoutes },
 ]);
 
 /** Step 1: a bare instance with its logger (`server.ts` logs the startup with it before the routes exist). */

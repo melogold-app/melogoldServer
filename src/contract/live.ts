@@ -18,6 +18,7 @@ export const LIVE_EVENT_TYPES = [
   "account.updated",
   "link.updated",
   "lyrics.changed",
+  "playback.command",
 ] as const;
 export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number];
 
@@ -47,6 +48,12 @@ export type AccountUpdatedReason = (typeof ACCOUNT_UPDATED_REASON_VALUES)[number
 
 export const LINK_UPDATED_STATUS_VALUES = ["claimed", "cancelled", "completed"] as const;
 export type LinkUpdatedStatus = (typeof LINK_UPDATED_STATUS_VALUES)[number];
+
+/** API §6: `GET /auth/me/events?remote=1` — the device can be controlled by the other devices (API §4.9). */
+export const LiveEventsQuery = z.object({
+  remote: z.enum(["0", "1"]).optional().meta({ description: "1: receive playback.command (remote control)." }),
+});
+export type LiveEventsQuery = z.output<typeof LiveEventsQuery>;
 
 export const LiveEvent = z
   .object({
@@ -84,6 +91,7 @@ export const PlaybackSummary = z
     at: IsoOut,
     updatedAt: IsoOut,
     handoffFrom: PlaybackHandoff.nullable(),
+    volume: IntOut.nullable(),
   })
   .meta({ id: "PlaybackSummary", description: "The playback state without the queue (the current track only)." });
 
@@ -133,6 +141,37 @@ export const LyricsChangedPayload = z.object({ videoId: VideoIdOut, rev: IntOut 
   description: "lyrics.changed: every device except the author, after PUT/DELETE /lyrics/{videoId}; coalesced for 2 s.",
 });
 
+/** API §4.9 `RemoteCommand.action`. */
+export const REMOTE_ACTION_VALUES = [
+  "play",
+  "pause",
+  "toggle",
+  "next",
+  "previous",
+  "seek",
+  "volume",
+  "play_queue",
+  "stop",
+] as const;
+export type RemoteAction = (typeof REMOTE_ACTION_VALUES)[number];
+
+export const PlaybackCommandPayload = z
+  .object({
+    commandId: UuidOut,
+    fromDeviceId: UuidOut,
+    fromDeviceName: z.string().nullable(),
+    action: enumOut(REMOTE_ACTION_VALUES),
+    positionMs: IntOut.nullable(),
+    volume: IntOut.nullable(),
+    queue: z.array(TrackDto).nullable(),
+    index: IntOut.nullable(),
+  })
+  .meta({
+    id: "PlaybackCommandPayload",
+    description:
+      "playback.command: the target device only, streams opened with remote=1 (API §4.9); fields the action has not are null.",
+  });
+
 /** API §6 table: the payload schema of each event type. */
 export const LIVE_EVENT_PAYLOADS = Object.freeze({
   "system.connected": SystemConnectedPayload,
@@ -143,6 +182,7 @@ export const LIVE_EVENT_PAYLOADS = Object.freeze({
   "account.updated": AccountUpdatedPayload,
   "link.updated": LinkUpdatedPayload,
   "lyrics.changed": LyricsChangedPayload,
+  "playback.command": PlaybackCommandPayload,
 } satisfies Record<LiveEventType, z.ZodType>);
 
 /** The payload type of an event type. */

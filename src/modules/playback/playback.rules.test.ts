@@ -118,6 +118,7 @@ function toStored(vector: VectorStored | null): StoredPlayback | null {
     handoffDeviceId: vector.handoffDeviceId,
     handoffSessionId: vector.handoffSessionId,
     handoffAt: vector.handoffAt,
+    volume: null,
   };
 }
 
@@ -202,6 +203,7 @@ describe("decidePlaybackPut: unit cases beyond the vectors", () => {
       handoffDeviceId: null,
       handoffSessionId: null,
       handoffAt: null,
+      volume: null,
     };
     const decision = decidePlaybackPut(
       stored,

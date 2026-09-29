@@ -7,6 +7,7 @@ import { z } from "zod";
 import { ArtistRef, TrackDto } from "../../contract/common.ts";
 import type { DeviceDto, TrackDto as TrackDtoValue, UserDto } from "../../contract/common.ts";
 import type { PlaybackState } from "../../contract/playback.ts";
+import type { ShareDto as ShareDtoValue } from "../../contract/shares.ts";
 import type {
   BookmarkRow as BookmarkDto,
   LikeRow as LikeDto,
@@ -29,6 +30,7 @@ import type {
   PlayForgetRow,
   PlayRow,
   PlayStatRow,
+  ShareRow,
   TrackOverrideRow,
   TrackRow,
 } from "./account.repository.ts";
@@ -183,6 +185,18 @@ export function toPlayForgetDto(row: PlayForgetRow): PlayForgetDto {
 const StoredQueue = z.array(z.unknown());
 
 /** `playback_state.queue` (JSON `TrackDto[]`): items that do not match are dropped. */
+/** API §4.11 `ShareDto` of a stored snapshot; `url` is `<PUBLIC_URL>/s/<id>` (`/s/<id>` without it). */
+export function toShareDto(row: ShareRow, publicUrl: string | null): ShareDtoValue {
+  return {
+    shareId: row.id,
+    kind: row.kind,
+    name: row.name,
+    url: `${publicUrl ?? ""}/s/${row.id}`,
+    tracks: decodeQueue(row.tracks),
+    createdAt: formatIso(row.created_at),
+  };
+}
+
 export function decodeQueue(text: string): TrackDtoValue[] {
   const parsed = StoredQueue.safeParse(parseJson(text));
   if (!parsed.success) return [];
@@ -220,5 +234,6 @@ export function toPlaybackState(row: PlaybackRow | undefined): PlaybackState | n
     updatedAt: formatIso(row.updated_at),
     queue,
     handoffFrom,
+    volume: row.volume,
   };
 }

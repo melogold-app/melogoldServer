@@ -7,7 +7,8 @@
     "0004_playback",
     "0005_history",
     "0006_lyrics",
-    "0007_overrides_pins"
+    "0007_overrides_pins",
+    "0008_shares_remote"
   ],
   "tables": {
     "server_meta": {
@@ -342,7 +343,8 @@
         { "name": "updated_at", "type": "TS", "nullable": false, "default": null },
         { "name": "handoff_device_id", "type": "ID", "nullable": true, "default": null },
         { "name": "handoff_session_id", "type": "ID", "nullable": true, "default": null },
-        { "name": "handoff_at", "type": "TS", "nullable": true, "default": null }
+        { "name": "handoff_at", "type": "TS", "nullable": true, "default": null },
+        { "name": "volume", "type": "INT", "nullable": true, "default": null }
       ],
       "primaryKey": ["user_id"],
       "unique": [],
@@ -479,6 +481,21 @@
       "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
       "checks": ["length(video_id) = 11", "deleted IN (0,1)"],
       "indexes": [{ "name": "sync_lyrics_pins_pull", "columns": ["user_id", "seq"], "unique": false, "where": null }]
+    },
+    "shares": {
+      "columns": [
+        { "name": "id", "type": "ID", "nullable": false, "default": null },
+        { "name": "user_id", "type": "ID", "nullable": false, "default": null },
+        { "name": "kind", "type": "TXT", "nullable": false, "default": null },
+        { "name": "name", "type": "TXT", "nullable": false, "default": null },
+        { "name": "tracks", "type": "JSON", "nullable": false, "default": null },
+        { "name": "created_at", "type": "TS", "nullable": false, "default": null }
+      ],
+      "primaryKey": ["id"],
+      "unique": [],
+      "foreignKeys": [{ "columns": ["user_id"], "table": "users", "references": ["id"], "onDelete": "CASCADE" }],
+      "checks": ["length(id) = 10"],
+      "indexes": [{ "name": "shares_user", "columns": ["user_id", "created_at"], "unique": false, "where": null }]
     }
   }
 }

@@ -24,7 +24,7 @@ import type { Socket } from "node:net";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import type { AppContext } from "../../context.ts";
-import { LiveEvent } from "../../contract/live.ts";
+import { LiveEvent, LiveEventsQuery } from "../../contract/live.ts";
 import { requireAuth } from "../../http/auth-guard.ts";
 import type { RequestAuth } from "../../http/auth-guard.ts";
 import { AppError } from "../../http/errors.ts";
@@ -72,7 +72,13 @@ function streamHeaders(reply: FastifyReply): OutgoingHttpHeaders {
 }
 
 /** Hijacks the reply and runs the stream until it closes (steps 1–4 of the module comment). */
-function openStream(deps: StreamDeps, request: FastifyRequest, reply: FastifyReply, auth: RequestAuth): void {
+function openStream(
+  deps: StreamDeps,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  auth: RequestAuth,
+  remote: boolean,
+): void {
   const { ctx } = deps;
   const hub = ctx.live;
   const timers = hub.timers;
@@ -123,6 +129,7 @@ function openStream(deps: StreamDeps, request: FastifyRequest, reply: FastifyRep
     deviceId: auth.deviceId,
     authVersion: auth.authVersion,
     expiresAt: auth.tokenExpiresAt,
+    remote,
     send: (event) => {
       write(sseEventFrame(event));
     },
@@ -189,7 +196,9 @@ export function registerLiveRoutes(app: FastifyInstance, ctx: AppContext): void 
           "`text/event-stream`: first `retry: 5000`, then system.connected; each event is `id: <uuid>` + " +
           "`data: <LiveEvent JSON>` without an `event:` line; heartbeats are comments. No replay (Last-Event-ID is " +
           "ignored). The server closes the stream at the token's `exp`, after session.invalidated, when auth_version " +
-          "grows and on shutdown; at most 4 streams per device and 64 per user (API §6).",
+          "grows and on shutdown; at most 4 streams per device and 64 per user (API §6). `remote=1`: the device " +
+          "lets the other devices control it and receives playback.command (API §4.9).",
+        querystring: LiveEventsQuery,
         status: 200,
         response: LiveEvent,
         contentType: EVENT_STREAM,
@@ -199,7 +208,7 @@ export function registerLiveRoutes(app: FastifyInstance, ctx: AppContext): void 
       const auth = requireAuth(request);
       // The guard checked `exp` a moment ago; a token that expired since opens nothing.
       if (auth.tokenExpiresAt <= ctx.clock.now()) throw new AppError("access_token_expired");
-      openStream(deps, request, reply, auth);
+      openStream(deps, request, reply, auth, (request.query as LiveEventsQuery).remote === "1");
     },
   );
 }

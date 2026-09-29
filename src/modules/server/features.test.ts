@@ -38,6 +38,8 @@ describe("FeatureRegistry", () => {
       "accountDeletion",
       "registrationPow",
       "lyrics",
+      "share",
+      "remote",
     ]);
   });
 

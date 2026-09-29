@@ -79,6 +79,7 @@ import {
   LinkUpdatedPayload,
   LiveEvent,
   LyricsChangedPayload,
+  PlaybackCommandPayload,
   PlaybackSummary,
   PlaybackUpdatedPayload,
   SessionInvalidatedPayload,
@@ -102,6 +103,7 @@ import {
   PlaybackState,
   PlaybackStateResponse,
 } from "./playback.ts";
+import { RemoteCommand, RemoteCommandResult, RemoteDevice, RemoteDeviceList } from "./remote.ts";
 import {
   AccountLimits,
   DeviceLinkingFeature,
@@ -116,9 +118,11 @@ import {
   ServerInfo,
   ServerLimits,
   ServerLinks,
+  ShareLimits,
   SyncFeature,
   SyncLimits,
 } from "./server.ts";
+import { CreateShareRequest, ShareCreated, ShareDto, ShareList } from "./shares.ts";
 import {
   BaselineEntry,
   BookmarkKey,
@@ -153,7 +157,9 @@ export * from "./linking.ts";
 export * from "./live.ts";
 export * from "./lyrics.ts";
 export * from "./playback.ts";
+export * from "./remote.ts";
 export * from "./server.ts";
+export * from "./shares.ts";
 export * from "./sync.ts";
 
 export type ComponentDirection = "request" | "response";
@@ -197,6 +203,8 @@ const REQUEST_SCHEMAS: readonly z.ZodType[] = [
   PlaybackHandoffInput,
   LyricsPut,
   LyricsChangesRequest,
+  RemoteCommand,
+  CreateShareRequest,
 ];
 
 /** Bodies the server sends (including errors and SSE events) and the objects inside them. */
@@ -222,6 +230,7 @@ const RESPONSE_SCHEMAS: readonly z.ZodType[] = [
   SyncLimits,
   HistoryLimits,
   PlaybackLimits,
+  ShareLimits,
   AccountLimits,
   LoginLimits,
   PasswordLimits,
@@ -282,6 +291,13 @@ const RESPONSE_SCHEMAS: readonly z.ZodType[] = [
   SharedLyrics,
   LyricsResponse,
   MyLyricsPage,
+  PlaybackCommandPayload,
+  RemoteDevice,
+  RemoteDeviceList,
+  RemoteCommandResult,
+  ShareCreated,
+  ShareDto,
+  ShareList,
 ];
 
 /**
@@ -297,6 +313,7 @@ export const CONTRACT_NAMED_INLINE_OBJECTS: readonly string[] = Object.freeze([
   "SyncLimits",
   "HistoryLimits",
   "PlaybackLimits",
+  "ShareLimits",
   "AccountLimits",
   "LoginLimits",
   "PasswordLimits",

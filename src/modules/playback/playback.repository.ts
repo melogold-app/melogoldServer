@@ -27,6 +27,7 @@ function fromRow(row: {
   handoff_device_id: string | null;
   handoff_session_id: string | null;
   handoff_at: number | null;
+  volume: number | null;
 }): StoredPlayback {
   return Object.freeze({
     rev: row.rev,
@@ -45,6 +46,7 @@ function fromRow(row: {
     handoffDeviceId: row.handoff_device_id,
     handoffSessionId: row.handoff_session_id,
     handoffAt: row.handoff_at,
+    volume: row.volume,
   });
 }
 
@@ -65,6 +67,21 @@ export async function deviceDisplayName(q: Queryable, deviceId: string): Promise
   return row.custom_name ?? row.reported_name;
 }
 
+/** A device of the account as the remote control lists it (API §4.9 `RemoteDevice`). */
+export type AccountDevice = Readonly<{ id: string; name: string; platform: string }>;
+
+/** Every device of the user, by display name (`customName ?? reportedName`), then id. */
+export async function listAccountDevices(q: Queryable, userId: string): Promise<AccountDevice[]> {
+  const rows = await q
+    .selectFrom("devices")
+    .select(["id", "custom_name", "reported_name", "platform"])
+    .where("user_id", "=", userId)
+    .execute();
+  return rows
+    .map((row) => ({ id: row.id, name: row.custom_name ?? row.reported_name, platform: row.platform }))
+    .sort((a, b) => (a.name === b.name ? (a.id < b.id ? -1 : 1) : a.name < b.name ? -1 : 1));
+}
+
 function updateValues(row: NewPlaybackRow, cleared: boolean) {
   return {
     rev: row.rev,
@@ -83,6 +100,7 @@ function updateValues(row: NewPlaybackRow, cleared: boolean) {
     handoff_device_id: row.handoffDeviceId,
     handoff_session_id: row.handoffSessionId,
     handoff_at: row.handoffAt,
+    volume: row.volume,
   };
 }
 

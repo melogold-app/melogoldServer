@@ -20,6 +20,7 @@ export type ErrorDetailValues = {
   minProtocol: number;
   maxProtocol: number;
   floorCursor: string;
+  maxShares: number;
 };
 
 export type ErrorDetailKey = keyof ErrorDetailValues;
@@ -34,6 +35,7 @@ export const ERROR_DETAIL_KEYS: readonly ErrorDetailKey[] = Object.freeze([
   "minProtocol",
   "maxProtocol",
   "floorCursor",
+  "maxShares",
 ]);
 
 export type ErrorCodeSpec = Readonly<{
@@ -99,6 +101,7 @@ export const ERROR_CODES = {
   not_found: { status: 404, message: "Not found", required: none, optional: none },
   device_not_found: { status: 404, message: "Device not found", required: none, optional: none },
   link_not_found: { status: 404, message: "Device link not found", required: none, optional: none },
+  share_not_found: { status: 404, message: "Share not found", required: none, optional: none },
   // 409
   login_taken: { status: 409, message: "Login is taken", required: none, optional: none },
   device_limit_reached: {
@@ -130,6 +133,14 @@ export const ERROR_CODES = {
     optional: none,
   },
   playback_queue_required: { status: 409, message: "Playback queue required", required: none, optional: none },
+  device_offline: { status: 409, message: "Device is offline", required: none, optional: none },
+  remote_control_disabled: {
+    status: 409,
+    message: "Remote control is disabled on the device",
+    required: none,
+    optional: none,
+  },
+  share_limit_reached: { status: 409, message: "Share limit reached", required: ["maxShares"], optional: none },
   // 410
   link_expired: { status: 410, message: "Device link has expired", required: none, optional: none },
   link_cancelled: { status: 410, message: "Device link was cancelled", required: none, optional: none },

@@ -19,7 +19,7 @@ import {
   Uuid,
   UuidOut,
 } from "./common.ts";
-import { INT32_MAX, PLAYBACK_LIMITS, STRING_LIMITS } from "./limits.ts";
+import { INT32_MAX, PLAYBACK_LIMITS, STRING_LIMITS, VOLUME_MAX } from "./limits.ts";
 
 /** `PlaybackPutResult.reason` when `applied` is false. */
 export const PLAYBACK_REJECT_REASON_VALUES = ["newer_state", "handed_off"] as const;
@@ -46,6 +46,9 @@ export const PlaybackState = z
     updatedAt: IsoOut,
     queue: z.array(TrackDto).meta({ minItems: 1, maxItems: PLAYBACK_LIMITS.queueMax }),
     handoffFrom: PlaybackHandoff.nullable(),
+    volume: IntOut.nullable().meta({
+      description: "0..100: the volume of the author's device; null when not reported.",
+    }),
   })
   .meta({ id: "PlaybackState" });
 
@@ -73,6 +76,7 @@ export const PlaybackPut = z
         .meta({ description: "Only when (sessionId, queueVersion) changed since the last successful PUT." }),
     ),
     handoffFrom: optional(PlaybackHandoffInput).meta({ description: 'Only for "listen here".' }),
+    volume: optional(int(0, VOLUME_MAX)).meta({ description: "0..100: the volume of this device (remote control)." }),
   })
   .superRefine((put, ctx) => {
     if (put.queue !== undefined && put.index >= put.queue.length) {

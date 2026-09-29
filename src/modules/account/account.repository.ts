@@ -18,6 +18,7 @@ import type {
   PlaybackStateTable,
   PlayEventsTable,
   PlayForgetsTable,
+  SharesTable,
   PlayStatsTable,
   SyncBookmarksTable,
   SyncLikesTable,
@@ -650,6 +651,25 @@ export async function exportPlayStatsPage(
   return query.orderBy("video_id").limit(limit).execute();
 }
 
+export type ShareRow = Pick<Selectable<SharesTable>, "id" | "kind" | "name" | "tracks" | "created_at">;
+
+/** The user's snapshots by link (API §4.11), by `(created_at, id)`. */
+export async function exportSharesPage(
+  q: Queryable,
+  userId: string,
+  after: Readonly<{ createdAt: number; id: string }> | null,
+  limit: number,
+): Promise<ShareRow[]> {
+  let query = q
+    .selectFrom("shares")
+    .select(["id", "kind", "name", "tracks", "created_at"])
+    .where("user_id", "=", userId);
+  if (after !== null) {
+    query = query.where((eb) => eb(eb.refTuple("created_at", "id"), ">", eb.tuple(after.createdAt, after.id)));
+  }
+  return query.orderBy("created_at").orderBy("id").limit(limit).execute();
+}
+
 /** History watermarks (`history.clear` / `history.forget`), by `video_id` (`*` sorts first). */
 export async function exportPlayForgetsPage(
   q: Queryable,
@@ -704,6 +724,7 @@ export const PURGE_TABLES = Object.freeze([
   { table: "sync_bookmarks", key: ["type", "browse_id"] },
   { table: "sync_track_overrides", key: ["video_id"] },
   { table: "sync_lyrics_pins", key: ["video_id"] },
+  { table: "shares", key: ["id"] },
   { table: "sync_ops", key: ["seq"] },
   { table: "play_events", key: ["event_id"] },
   { table: "play_stats", key: ["video_id"] },

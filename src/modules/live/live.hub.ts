@@ -48,6 +48,11 @@ export type LiveStreamHandle = Readonly<{
   authVersion: number;
   /** `exp` of that token, epoch ms: the stream closes at this moment. */
   expiresAt: number;
+  /**
+   * The device lets the other devices of the account control it (`?remote=1`, API §6): only such streams receive
+   * `playback.command`. Absent: `false`.
+   */
+  remote?: boolean;
   /** Writes one event frame; may throw when the connection is gone (the hub then drops the stream). */
   send(event: LiveEvent): void;
   /**
@@ -171,6 +176,48 @@ export class LiveHub implements RemovalLive {
   /** Every stream open now, oldest first per user (for the heartbeat revalidation, `revalidate.ts`). */
   streams(): readonly LiveStream[] {
     return [...this.#byUser.values()].flat();
+  }
+
+  /**
+   * The devices of the user with an open stream now (remote control, API §4.9): deviceId → whether one of its streams
+   * was opened with `remote=1`.
+   */
+  presence(userId: string): ReadonlyMap<string, Readonly<{ remote: boolean }>> {
+    const devices = new Map<string, { remote: boolean }>();
+    for (const stream of this.#byUser.get(userId) ?? []) {
+      const known = devices.get(stream.deviceId);
+      devices.set(stream.deviceId, { remote: (known?.remote ?? false) || stream.remote === true });
+    }
+    return devices;
+  }
+
+  /**
+   * Delivers an event now to the streams of one device opened with `remote=1` (`playback.command`, API §6).
+   * @returns how many streams got it (0: none; the device may have left at this moment).
+   */
+  publishToRemote<T extends LiveEventType>(userId: string, deviceId: string, type: T, payload: LivePayload<T>): number {
+    const recipients = (this.#byUser.get(userId) ?? []).filter(
+      (stream) => stream.deviceId === deviceId && stream.remote === true,
+    );
+    if (recipients.length === 0) return 0;
+    let event: LiveEvent;
+    try {
+      event = buildLiveEvent(type, payload, this.#clock.now(), this.#newId());
+    } catch (error) {
+      this.#log.error({ err: error, type }, "live event dropped: invalid payload");
+      return 0;
+    }
+    let delivered = 0;
+    for (const stream of recipients) {
+      try {
+        stream.send(event);
+        delivered++;
+      } catch (error) {
+        this.#log.warn({ err: error, type }, "live stream failed to send; closing it");
+        this.#close(stream, "broken");
+      }
+    }
+    return delivered;
   }
 
   /** Number of open streams (of one user, or in total). */

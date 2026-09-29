@@ -234,6 +234,15 @@
       }
     },
     {
+      "code": "share_not_found",
+      "status": 404,
+      "message": "Share not found",
+      "details": {
+        "required": [],
+        "optional": []
+      }
+    },
+    {
       "code": "login_taken",
       "status": 409,
       "message": "Login is taken",
@@ -326,6 +335,35 @@
       "message": "Playback queue required",
       "details": {
         "required": [],
+        "optional": []
+      }
+    },
+    {
+      "code": "device_offline",
+      "status": 409,
+      "message": "Device is offline",
+      "details": {
+        "required": [],
+        "optional": []
+      }
+    },
+    {
+      "code": "remote_control_disabled",
+      "status": 409,
+      "message": "Remote control is disabled on the device",
+      "details": {
+        "required": [],
+        "optional": []
+      }
+    },
+    {
+      "code": "share_limit_reached",
+      "status": 409,
+      "message": "Share limit reached",
+      "details": {
+        "required": [
+          "maxShares"
+        ],
         "optional": []
       }
     },

@@ -32,6 +32,15 @@ export const SYNC_LIMITS = Object.freeze({
   playAddPerHour: 2000,
 } as const);
 
+/** API §11 `ServerLimits.share` (§4.11). */
+export const SHARE_LIMITS = Object.freeze({ maxShares: 200, maxTracks: 1000 } as const);
+
+/** API §4.11: `ShareId` is 10 base62 characters. */
+export const SHARE_ID_PATTERN = /^[0-9A-Za-z]{10}$/;
+
+/** API §4.9 `volume`: 0..100. */
+export const VOLUME_MAX = 100;
+
 /** API §11 `ServerLimits.playback`. */
 export const PLAYBACK_LIMITS = Object.freeze({ queueMax: 200, maxBodyBytes: 131_072 } as const);
 
@@ -85,6 +94,7 @@ export type ServerLimitsValue = Readonly<{
   sync: typeof SYNC_LIMITS;
   history: Readonly<{ retentionDays: number; maxEvents: number; mergeUploadMax: number }>;
   playback: typeof PLAYBACK_LIMITS;
+  share: typeof SHARE_LIMITS;
   account: Readonly<{
     maxDevices: number | null;
     newDeviceRestrictHours: number;
@@ -112,6 +122,7 @@ export function buildServerLimits(
       mergeUploadMax: env.HISTORY_MERGE_UPLOAD_MAX,
     }),
     playback: PLAYBACK_LIMITS,
+    share: SHARE_LIMITS,
     account: Object.freeze({
       maxDevices: env.MAX_DEVICES_PER_USER,
       newDeviceRestrictHours: env.NEW_DEVICE_RESTRICT_HOURS,

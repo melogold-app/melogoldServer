@@ -56,6 +56,8 @@ export const ServerFeatures = z
     accountDeletion: FeatureVersion.optional(),
     registrationPow: FeatureVersion.optional().meta({ description: "Present while proof of work is required." }),
     lyrics: FeatureVersion.optional().meta({ description: "Lyrics of the user and shared ones (API §4.10)." }),
+    share: FeatureVersion.optional().meta({ description: "Snapshots of own playlists by link (API §4.11)." }),
+    remote: FeatureVersion.optional().meta({ description: "Remote control of other devices (API §4.9)." }),
   })
   .meta({ id: "ServerFeatures", description: "An absent key means the feature is not supported (API §1.3)." });
 
@@ -90,6 +92,8 @@ export const HistoryLimits = z
 
 export const PlaybackLimits = z.object({ queueMax: IntOut, maxBodyBytes: IntOut }).meta({ id: "PlaybackLimits" });
 
+export const ShareLimits = z.object({ maxShares: IntOut, maxTracks: IntOut }).meta({ id: "ShareLimits" });
+
 export const LoginLimits = z
   .object({ minLength: IntOut, maxLength: IntOut, pattern: z.string() })
   .meta({ id: "LoginLimits", description: "Rules for a new login, after normalization." });
@@ -112,6 +116,7 @@ export const ServerLimits = z
     sync: SyncLimits,
     history: HistoryLimits,
     playback: PlaybackLimits,
+    share: ShareLimits,
     account: AccountLimits,
   })
   .meta({ id: "ServerLimits", description: "Code constants (API §11); `history` and `account` partly from env." });

@@ -11,6 +11,7 @@ import { up as playback } from "./0004_playback.ts";
 import { up as history } from "./0005_history.ts";
 import { up as lyrics } from "./0006_lyrics.ts";
 import { up as overridesPins } from "./0007_overrides_pins.ts";
+import { up as sharesRemote } from "./0008_shares_remote.ts";
 
 export type MigrationUp = (db: Kysely<unknown>, d: Ddl) => Promise<void>;
 
@@ -24,4 +25,5 @@ export const MIGRATIONS: readonly MelogoldMigration[] = Object.freeze([
   { name: "0005_history", up: history },
   { name: "0006_lyrics", up: lyrics },
   { name: "0007_overrides_pins", up: overridesPins },
+  { name: "0008_shares_remote", up: sharesRemote },
 ]);

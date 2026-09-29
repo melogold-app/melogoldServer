@@ -30,6 +30,7 @@ import {
   toPlayForgetDto,
   toPlayStatDto,
   toPlaybackState,
+  toShareDto,
   toTrackDto,
   toTrackOverrideDto,
 } from "./dto.ts";
@@ -219,7 +220,15 @@ export async function prepareExport(
       (row) => JSON.stringify(toPlayForgetDto(row)),
       pageSize,
     );
-    yield `]},"playback":${playback}}`;
+    yield `]},"playback":${playback},"shares":[`;
+    yield* arrayMembers(
+      (after: { createdAt: number; id: string } | null, limit) =>
+        ctx.db.read((q) => repo.exportSharesPage(q, userId, after, limit)),
+      (row) => ({ createdAt: row.created_at, id: row.id }),
+      (row) => JSON.stringify(toShareDto(row, ctx.env.PUBLIC_URL)),
+      pageSize,
+    );
+    yield `]}`;
   }
 
   return Object.freeze({ filename: exportFilename(head.user.login, exportedAt), chunks: document() });

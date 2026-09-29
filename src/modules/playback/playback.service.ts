@@ -54,10 +54,12 @@ function toApiState(row: StoredPlayback): PlaybackState {
     updatedAt: formatIso(row.updatedAt),
     queue: [...row.queue],
     handoffFrom: handoffOf(row),
+    volume: row.volume,
   };
 }
 
-function toSummary(row: NewPlaybackRow): PlaybackSummary {
+/** The state without its queue (`playback.updated`, `RemoteDevice.playing`). */
+export function toSummary(row: NewPlaybackRow): PlaybackSummary {
   return {
     rev: row.rev,
     deviceId: row.deviceId,
@@ -73,6 +75,7 @@ function toSummary(row: NewPlaybackRow): PlaybackSummary {
     at: formatIso(row.stateAt),
     updatedAt: formatIso(row.updatedAt),
     handoffFrom: handoffOf(row),
+    volume: row.volume,
   };
 }
 
@@ -117,6 +120,7 @@ export async function putPlaybackState(
         playing: body.playing,
         ...(queue === undefined ? {} : { queue }),
         ...(body.handoffFrom === undefined ? {} : { handoffFrom: body.handoffFrom }),
+        ...(body.volume === undefined ? {} : { volume: body.volume }),
       };
       const decision = decidePlaybackPut(stored, input, nowMs);
 

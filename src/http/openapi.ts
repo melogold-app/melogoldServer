@@ -199,11 +199,12 @@ export function transformRoute({
 }): { schema: FastifySchema; url: string } {
   if (schema?.operationId === undefined || schema.tags === undefined) return { schema: { hide: true }, url };
   const method = Array.isArray(route.method) ? (route.method[0] ?? "GET") : route.method;
-  const { body, documentedBody, params, response, errorCodes, ...rest } = schema;
+  const { body, documentedBody, params, querystring, response, errorCodes, ...rest } = schema;
   const transformed: FastifySchema = { ...rest };
   const requestBody = documentedBody ?? body;
   if (requestBody !== undefined) transformed.body = schemaJson(requestBody, "input");
   if (params !== undefined) transformed.params = schemaJson(params, "input");
+  if (querystring !== undefined) transformed.querystring = schemaJson(querystring, "input");
   if (resolveRoutePolicy(method, url).syncProtocol) transformed.headers = SYNC_PROTOCOL_HEADER_SCHEMA;
   if (typeof response === "object" && response !== null) {
     const responses: Record<string, unknown> = {};

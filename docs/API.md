@@ -171,6 +171,8 @@
 - `/playback/state` — 128 КиБ;
 - `/auth/**` — 16 КиБ;
 - `/lyrics/{videoId}` — 1 МиБ;
+- `POST /shares` — 1 МиБ;
+- `POST /playback/commands` — 128 КиБ;
 - остальное — 64 КиБ.
 
 Превышение любого из них → `413 payload_too_large`.
@@ -207,9 +209,13 @@
 | `GET /sync/summary`, `POST /sync/merge-plan` | 10/мин user |
 | `POST /sync` | 120/мин user |
 | `GET /playback/state` | 60/мин device |
-| `PUT /playback/state` | 30/мин device |
+| `PUT /playback/state` | 120/мин device |
 | `DELETE /playback/state` | 10/мин user |
 | `PUT /lyrics/{videoId}`, `DELETE /lyrics/{videoId}` | 60/мин user |
+| `GET /playback/devices` | 60/мин device |
+| `POST /playback/commands` | 10/с device |
+| `POST /shares` | 20/ч user, не больше 200 снимков |
+| `GET /shares/{shareId}`, `GET /s/{shareId}` | 60/мин ip |
 | `/health*`, `/openapi.json`, `/docs` | без лимита |
 
 ---
@@ -226,7 +232,7 @@ type ErrorResponse = {
   // детали — только у своих кодов:
   retryAfterSeconds?: number; issues?: ValidationIssue[]; minLength?: number; maxLength?: number;
   deviceLimit?: number; deviceCount?: number; minProtocol?: number; maxProtocol?: number;
-  floorCursor?: string;
+  floorCursor?: string; maxShares?: number;
 };
 type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код zod */ };
 ```
@@ -258,8 +264,9 @@ type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код
 | 403 | `recent_device_restricted` | — | revoke*, PATCH devices | запросить пароль и повторить с `password` |
 | 403 | `link_denied` | — | link/poll | «Отклонено» |
 | 404 | `not_found` | — | неизвестный маршрут | — |
-| 404 | `device_not_found` | — | devices/{id} | перечитать список |
+| 404 | `device_not_found` | — | devices/{id}, playback/commands | перечитать список |
 | 404 | `link_not_found` | — | link/*, me/links/* | «Код не найден» |
+| 404 | `share_not_found` | — | shares/{id}, s/{id} | «Ссылка удалена или неверна» |
 | 409 | `login_taken` | — | register | подсказка у поля |
 | 409 | `device_limit_reached` | `deviceLimit`, `deviceCount` | login, approve, poll | открыть список устройств |
 | 409 | `cannot_revoke_current_device` | — | revoke | использовать logout |
@@ -268,6 +275,9 @@ type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код
 | 409 | `recovery_code_outdated` | — | recovery-code/confirm | перечитать `/auth/me` |
 | 409 | `protocol_unsupported` | `minProtocol`, `maxProtocol` | sync, playback | `Incompatible` |
 | 409 | `playback_queue_required` | — | PUT playback | повторить с `queue` |
+| 409 | `device_offline` | — | playback/commands | «Устройство не в сети» |
+| 409 | `remote_control_disabled` | — | playback/commands | «На устройстве управление выключено» |
+| 409 | `share_limit_reached` | `maxShares` | POST shares | предложить удалить старые ссылки |
 | 410 | `link_expired`, `link_cancelled` | — | link/* | пересоздать привязку |
 | 410 | `cursor_invalid` | — | sync | `Merging(silent)` |
 | 410 | `cursor_expired` | `floorCursor` | sync | `FullResync(authoritative)` |
@@ -353,10 +363,17 @@ type ValidationIssue = { path: string /* "ops.3.opId" */; code: string /* код
 | 40 | PUT | `/lyrics/{videoId}` | `putLyrics` | Bearer | 200 | сохранить свою версию текста |
 | 41 | DELETE | `/lyrics/{videoId}` | `deleteLyrics` | Bearer | 204 | удалить свою версию текста |
 | 42 | POST | `/auth/me/lyrics/changes` | `listMyLyricsChanges` | Bearer | 200 | свои версии текстов, изменённые после `after` |
+| 43 | GET | `/playback/devices` | `listRemoteDevices` | Bearer + XSP | 200 | свои устройства для пульта: в сети, разрешено ли управление, что играет |
+| 44 | POST | `/playback/commands` | `sendRemoteCommand` | Bearer + XSP | 202 | команда другому устройству (§4.9) |
+| 45 | POST | `/shares` | `createShare` | Bearer | 201 | снимок своего плейлиста по ссылке (§4.11) |
+| 46 | GET | `/shares` | `listShares` | Bearer | 200 | свои снимки |
+| 47 | DELETE | `/shares/{shareId}` | `deleteShare` | Bearer | 204 | удалить свой снимок |
+| 48 | GET | `/shares/{shareId}` | `getShare` | public | 200 | снимок по ссылке для приложения |
+| 49 | GET | `/s/{shareId}` | — (вне OpenAPI) | public | 200 html | страница снимка для браузера |
 | — | GET | `/docs` | — | public | 200 | только при `OPENAPI_DOCS_UI=true` |
 
 - XSP — заголовок `X-Sync-Protocol`.
-- Параметры `{deviceId}` и `{linkId}` имеют тип `Uuid`, `{videoId}` — тип `VideoId`. Неверный формат → `400 invalid_request`.
+- Параметры `{deviceId}` и `{linkId}` имеют тип `Uuid`, `{videoId}` — тип `VideoId`, `{shareId}` — тип `ShareId` (`^[0-9A-Za-z]{10}$`). Неверный формат → `400 invalid_request`.
 - Маршрутов `/history*`, `/link/*` и `DELETE /auth/me/devices/{id}` **нет**.
 
 ---
@@ -451,6 +468,8 @@ type ServerInfo = {
     recoveryCode?: { version: number }; export?: { version: number }; accountDeletion?: { version: number };
     registrationPow?: { version: number };      // есть, если PoW сейчас требуется
     lyrics?: { version: number };               // §4.10
+    share?: { version: number };                // §4.11
+    remote?: { version: number };               // §4.9, пульт
   };
   limits: ServerLimits;               // §11
   links: { source: string /* …/tree/<GIT_SHA> */; privacy: string | null; contact: string | null };
@@ -463,10 +482,11 @@ type ServerInfo = {
  "secureTransport":true,"registration":"open",
  "features":{"sync":{"protocol":1,"minProtocol":1,"kinds":["like.set","bookmark.set","playlist.create","playlist.update","playlist.delete","playlist.items.add","playlist.item.remove","playlist.item.move","playlist.items.replace","playlist.import","play.add","play.baseline","history.clear","history.forget","track.override.set","lyrics.pin.set"],"streams":["library","history"]},
   "playback":{"version":1},"deviceLinking":{"version":1,"modes":["request","invite"],"ttlSeconds":300,"longPollSeconds":25},
-  "recoveryCode":{"version":1},"export":{"version":1},"accountDeletion":{"version":1},"registrationPow":{"version":1},"lyrics":{"version":1}},
+  "recoveryCode":{"version":1},"export":{"version":1},"accountDeletion":{"version":1},"registrationPow":{"version":1},"lyrics":{"version":1},"share":{"version":1},"remote":{"version":1}},
  "limits":{"sync":{"maxOpsPerRequest":500,"maxBodyBytes":4194304,"maxWorkUnitsPerRequest":20000,"defaultPageSize":500,"maxPageSize":2000,"maxVideoIdsPerAdd":500,"maxVideoIdsPerList":10000,"maxBaselineEntries":500,"maxIncludeKeys":1000,"maxPlaylists":1000,"maxPlaylistItems":10000,"maxItemsTotal":100000,"maxLikes":100000,"maxBookmarksPerType":20000,"maxTracks":150000,"maxTrackOverrides":150000,"maxLyricsPins":150000,"maxPlayStats":100000,"maxPlayEvents":60000,"playAddPerHour":2000},
   "history":{"retentionDays":400,"maxEvents":50000,"mergeUploadMax":20000},
   "playback":{"queueMax":200,"maxBodyBytes":131072},
+  "share":{"maxShares":200,"maxTracks":1000},
   "account":{"maxDevices":20,"newDeviceRestrictHours":24,"login":{"minLength":3,"maxLength":32,"pattern":"^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$"},"password":{"minLength":8,"maxLength":128}}},
  "links":{"source":"https://github.com/melogold-app/melogoldServer/tree/3f9c2ab1d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8","privacy":"https://melogold.app/privacy","contact":null},
  "serverTime":"2026-09-23T10:00:00.000Z"}
@@ -622,12 +642,13 @@ type ExportDocument = {
              overrides: TrackOverrideRow[] /*живые*/; lyricsPins: LyricsPinRow[] /*живые*/ };
   history: { plays: PlayRow[] /*in_history*/; playStats: PlayStatRow[]; playForgets: PlayForgetRow[] };
   playback: PlaybackState | null;
+  shares: ShareDto[];                                                          // свои снимки (§4.11)
 };
 type ExportPlaylist = { id: Uuid; name: string; browseId: string | null; thumbnailUrl: string | null; createdAt: Iso; items: ExportPlaylistItem[] };
 type ExportPlaylistItem = { videoId: VideoId; addedAt: Iso };                  // ORDER BY sortKey, videoId (ordinal)
 ```
 ```json
-{"format":"melogold-export","formatVersion":1,"exportedAt":"2026-09-23T10:00:00.000Z","server":{"serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","instanceName":"Melogold","version":"0.1.0"},"account":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-23T10:00:00.000Z"},"devices":[],"library":{"tracks":[],"likes":[],"bookmarks":[],"playlists":[{"id":"b8e0d4c2-1a3b-4c5d-9e6f-7a8b9c0d1e2f","name":"Дорога","browseId":null,"thumbnailUrl":null,"createdAt":"2026-09-23T10:00:00.000Z","items":[{"videoId":"dQw4w9WgXcQ","addedAt":"2026-09-23T10:00:00.000Z"}]}],"overrides":[{"videoId":"dQw4w9WgXcQ","title":"Never Gonna Give You Up","artistsText":null,"albumTitle":"Whenever You Need Somebody","updatedAt":"2026-09-23T10:00:00.000Z","deleted":false}],"lyricsPins":[]},"history":{"plays":[],"playStats":[],"playForgets":[]},"playback":null}
+{"format":"melogold-export","formatVersion":1,"exportedAt":"2026-09-23T10:00:00.000Z","server":{"serverId":"6f1c2c0e-8a3b-4f7e-9c1d-2b5e7a9f0c11","instanceName":"Melogold","version":"0.1.0"},"account":{"id":"0c3f6a2e-5d1b-4c7a-9e8f-1a2b3c4d5e6f","login":"maxim","createdAt":"2026-09-23T10:00:00.000Z","passwordChangedAt":"2026-09-23T10:00:00.000Z"},"devices":[],"library":{"tracks":[],"likes":[],"bookmarks":[],"playlists":[{"id":"b8e0d4c2-1a3b-4c5d-9e6f-7a8b9c0d1e2f","name":"Дорога","browseId":null,"thumbnailUrl":null,"createdAt":"2026-09-23T10:00:00.000Z","items":[{"videoId":"dQw4w9WgXcQ","addedAt":"2026-09-23T10:00:00.000Z"}]}],"overrides":[{"videoId":"dQw4w9WgXcQ","title":"Never Gonna Give You Up","artistsText":null,"albumTitle":"Whenever You Need Somebody","updatedAt":"2026-09-23T10:00:00.000Z","deleted":false}],"lyricsPins":[]},"history":{"plays":[],"playStats":[],"playForgets":[]},"playback":null,"shares":[]}
 ```
 
 ### 4.6 Привязка устройств (QR и код через сервер)
@@ -875,6 +896,7 @@ type PlaybackState = {
   at: Iso /*effAt*/; updatedAt: Iso;
   queue: TrackDto[];                     // 1..200
   handoffFrom: PlaybackHandoff | null;
+  volume: number | null;                 // 0..100: громкость устройства-автора; null — не сообщало
 };
 type PlaybackStateResponse = { state: PlaybackState | null; serverTime: Iso };
 type PlaybackPut = {
@@ -882,6 +904,7 @@ type PlaybackPut = {
   index: number /*0..len-1*/; positionMs: number /*Int53 ≥0*/; durationMs?: number; playing: boolean;
   queue?: TrackInput[];                  // 1..200; videoId каждого обязан быть верным (иначе 400)
   handoffFrom?: PlaybackHandoffInput;    // только при «Слушать здесь»
+  volume?: number;                       // 0..100: громкость этого устройства (пульт, §4.9 «Пульт»)
 };
 type PlaybackPutResult = {
   applied: boolean; rev: number | null;
@@ -889,6 +912,24 @@ type PlaybackPutResult = {
   state: PlaybackState | null;           // при !applied — текущее состояние сервера (с queue)
   serverTime: Iso;
 };
+type RemoteDevice = {
+  deviceId: Uuid; name: string; platform: string;
+  online: boolean;                       // у устройства открыт SSE-поток прямо сейчас
+  controllable: boolean;                 // хотя бы один его поток открыт с remote=1 (§6)
+  playing: PlaybackSummary | null;       // если это устройство — автор текущего playback_state
+  volume: number | null;                 // 0..100: последнее, что устройство сообщило в PUT /playback/state
+};
+type RemoteDeviceList = { devices: RemoteDevice[]; serverTime: Iso };   // свои устройства, кроме вызывающего
+type RemoteCommand = {
+  commandId: Uuid;                       // делает клиент; повтор того же id в течение 60 с — тот же ответ, без доставки
+  targetDeviceId: Uuid;
+  action: string;                        // play|pause|toggle|next|previous|seek|volume|play_queue|stop
+  positionMs?: number;                   // seek: 0..2^53−1
+  volume?: number;                       // volume: 0..100
+  queue?: TrackInput[];                  // play_queue: 1..200
+  index?: number;                        // play_queue: начальный индекс, 0..len−1
+};
+type RemoteCommandResult = { delivered: boolean };                      // false — цель ушла из сети в этот момент
 ```
 **`PUT /playback/state`:**
 ```json
@@ -905,6 +946,18 @@ type PlaybackPutResult = {
 - **Ошибки:** `400` (`index` вне очереди, неверный элемент очереди), `413`, `503 storage_full`.
 - **`GET`** → `{"state":null,"serverTime":"…"}` (нет состояния или очищено) либо полное состояние.
 - **`DELETE`** → 204. Сервер ставит надгробие, затем SSE `playback.updated{cleared:true}`.
+
+**Пульт: управление другим устройством** (`features.remote`):
+- **`GET /playback/devices`** → `RemoteDeviceList`: все устройства аккаунта, кроме вызывающего, по имени. `online` и `controllable` — по открытым SSE-потокам этого процесса сервера. `playing` — `PlaybackSummary` текущего состояния, если его автор — это устройство и оно не очищено; `volume` — из того же состояния (иначе `null`).
+- **`POST /playback/commands`** → `202 RemoteCommandResult`. Проверки по порядку:
+  1. `targetDeviceId` — не устройство аккаунта или это сам вызывающий → `404 device_not_found`;
+  2. у цели нет открытого потока → `409 device_offline`;
+  3. ни один поток цели не открыт с `remote=1` → `409 remote_control_disabled`;
+  4. поля действия: `seek` требует `positionMs`, `volume` — `volume`, `play_queue` — `queue` и `index < len(queue)`; иначе `400 invalid_request`.
+- Команда уходит SSE `playback.command` **только** в потоки цели с `remote=1` (§6). Сервер её не хранит и не повторяет; повтор `commandId` за 60 с отвечает прежним `RemoteCommandResult` без повторной доставки.
+- Цель выполняет команду своим плеером и сообщает итог обычным `PUT /playback/state` (с `volume`), остальные видят `playback.updated`. Отдельного ответа на команду нет.
+- `queue` команды `play_queue` чистится, как очередь `PUT /playback/state` (DESIGN §3.9): неверный `videoId` → `400`.
+- Значимое изменение для `playback.updated` (DESIGN §3.12.4) — ещё и смена `volume` на 5 и больше.
 
 ### 4.10 Тексты песен
 Свои тексты пользователя: набранные и синхронизированные в редакторе, импортированные из файла или выбранные вместо найденного автоматически. У пользователя не больше одной версии на `videoId`.
@@ -968,6 +1021,25 @@ type MyLyricsPage = {
 {"items":[{"id":"5d2c7e1a-9b3f-4c6d-8e2a-1f0b3c4d5e6f","videoId":"dQw4w9WgXcQ","rev":4,"deleted":true,"text":null,"updatedAt":"2026-09-25T12:05:00.000Z"}],"rev":4,"more":false}
 ```
 
+### 4.11 Ссылки на свои плейлисты (`features.share`)
+```ts
+type CreateShareRequest = { kind: string /*playlist*/; name: string /*1..200*/; tracks: TrackInput[] /*1..1000*/ };
+type ShareCreated = { shareId: string /*ShareId*/; url: string; createdAt: Iso };        // url = <base>/s/<shareId>
+type ShareDto = { shareId: string /*ShareId*/; kind: string; name: string; url: string; tracks: TrackDto[]; createdAt: Iso };
+type ShareList = { shares: ShareDto[] };
+```
+- **Снимок** не меняется: изменили плейлист — поделились снова, получилась новая ссылка. Треки чистятся по DESIGN §3.9: неверный `videoId` → `400`, пустое название трека — заглушка.
+- **`POST /shares`** → `201 ShareCreated`. Больше `limits.share.maxShares` (200) снимков → `409 share_limit_reached{maxShares}`. `name` обрезается по краям, до 200 символов; пустое — «Без названия» / «Untitled» по `Accept-Language`.
+- **`GET /shares`** → `ShareList`, новые первыми. **`DELETE /shares/{shareId}`** → 204; чужой или неизвестный — `404 share_not_found`.
+- **`GET /shares/{shareId}`** без входа → `ShareDto`; неизвестный → `404 share_not_found`. Автор не раскрывается.
+- **`url`** — `PUBLIC_URL`, иначе адрес запроса (как у `GET /`), плюс `/s/<shareId>`.
+- **`GET /s/{shareId}`** без входа — HTML-страница: название, число треков, список «исполнитель — трек · 3:45» со ссылкой каждого на `https://music.youtube.com/watch?v=<id>`, кнопки «Открыть в Melogold» (`melogold://share?v=1&url=<base>&id=<shareId>`, §7.2) и «Слушать на YouTube» (`https://www.youtube.com/watch_videos?video_ids=<id>,…`, первые 50). Без скриптов и внешних ресурсов, `noindex`, язык — по `Accept-Language`. Неизвестный снимок — страница «Ссылка удалена или неверна» с кодом 404.
+- **Выгрузка аккаунта** (§4.5) включает свои снимки; при удалении аккаунта они удаляются.
+
+```json
+{"shareId":"a1B2c3D4e5","url":"https://music.example.com/s/a1B2c3D4e5","createdAt":"2026-09-30T10:00:00.000Z"}
+```
+
 ---
 
 ## 5. Состояния и переходы, на которые ссылается контракт
@@ -995,7 +1067,8 @@ type MyLyricsPage = {
 - заголовки: `Authorization: Bearer`; ответ `text/event-stream; charset=utf-8`, `Cache-Control: no-store, no-transform`, `X-Accel-Buffering: no`;
 - первый кадр — `retry: 5000`, затем событие `system.connected`;
 - кадр события: `id: <uuid>\ndata: <LiveEvent JSON>\n\n`, **без строки `event:`**;
-- heartbeat — комментарий `: heartbeat <ms>` каждые `SSE_HEARTBEAT_SECONDS`.
+- heartbeat — комментарий `: heartbeat <ms>` каждые `SSE_HEARTBEAT_SECONDS`;
+- параметр `remote=1`: устройство разрешает управлять собой с других устройств (пульт, §4.9) и получает `playback.command`. Без него команды не приходят, а `POST /playback/commands` на это устройство отвечает `409 remote_control_disabled`.
 
 **Реплея нет,** `Last-Event-ID` игнорируется. После (пере)подключения клиент делает `POST /sync` (если есть binding), `GET /playback/state`, `POST /auth/me/lyrics/changes` и перечитывает открытые экраны.
 
@@ -1028,6 +1101,7 @@ type LiveEvent = { id: Uuid; type: string; at: Iso; payload: object | null };
 | `account.updated` | все, кроме автора | `AccountUpdatedPayload {reason, byDevice: {id, name}}`; reason: `password_changed\|password_changed_without_old\|recovery_code_rotated` | действия безопасности |
 | `link.updated` | устройство-одобряющее | `LinkUpdatedPayload {linkId, status}`; status: `claimed\|cancelled\|completed` | действие другой стороны |
 | `lyrics.changed` | все, кроме автора | `LyricsChangedPayload {videoId, rev}` | после commit `PUT` и `DELETE /lyrics/{videoId}`, которые что-то изменили; склейка 2 с |
+| `playback.command` | устройство-цель, потоки с `remote=1` | `PlaybackCommandPayload {commandId, fromDeviceId, fromDeviceName: string \| null, action, positionMs: number \| null, volume: number \| null, queue: TrackDto[] \| null, index: number \| null}` | `POST /playback/commands`; поля действия, которых у команды нет, — `null` |
 
 ```ts
 type PlaybackSummary = {
@@ -1035,6 +1109,7 @@ type PlaybackSummary = {
   index: number; queueLength: number; track: TrackDto | null;
   positionMs: number; durationMs: number | null; playing: boolean; at: Iso; updatedAt: Iso;
   handoffFrom: PlaybackHandoff | null;
+  volume: number | null;
 };
 ```
 ```text
@@ -1086,6 +1161,7 @@ data: {"id":"1f2e3d4c-5b6a-4978-8a7b-6c5d4e3f2a1b","type":"account.updated","at"
 |---|---|---|
 | Привязка устройства | `melogold://link?v=1&mode=<request\|invite>&server=<base, percent-encoded>&sid=<serverId>&token=<linkToken>` | клиент, показывающий QR |
 | Адрес сервера (deep link) | `melogold://server?v=1&url=<base, percent-encoded>&sid=<serverId>` | кнопка на `GET /` |
+| Снимок плейлиста (deep link) | `melogold://share?v=1&url=<base, percent-encoded>&id=<shareId>` | кнопка на `GET /s/{shareId}` (§4.11) |
 | Адрес сервера (QR) | сам base URL (`https://music.example.com`, `http://192.168.1.50:8080`) | `melogold qr`, итог установщика |
 
 - **Кодирование:** percent-encoding RFC 3986 (`encodeURIComponent`). Порядок параметров любой, неизвестные игнорируются.
@@ -1100,13 +1176,14 @@ data: {"id":"1f2e3d4c-5b6a-4978-8a7b-6c5d4e3f2a1b","type":"account.updated","at"
   2. **`melogold://server` или `http(s)` URL** — кандидат адреса сервера. Если есть `sid`, он должен совпасть.
   3. **Прочее** — «Это не код Melogold».
 - **Deep link из ОС (M1).** Схема `melogold` регистрируется так:
-  - Android: intent-filter `scheme=melogold`, hosts `server` и `link`;
+  - Android: intent-filter `scheme=melogold`, hosts `server`, `link` и `share`;
   - macOS: `CFBundleURLSchemes`;
   - Windows: `HKCU\Software\Classes\melogold`;
   - Linux: `.desktop` с `MimeType=x-scheme-handler/melogold;`.
 
   Обработчик:
   - `server` → экран «Свой сервер» с заполненным адресом и подтверждением;
+  - `share` → `GET <url>/shares/<id>` без входа → экран «Плейлист по ссылке» (сохранить — только явной кнопкой);
   - `link?mode=invite` → экран «Войти с другого устройства» с заполненным сервером и **явной кнопкой** «Подключиться», без автоматического claim;
   - `link?mode=request` **не выполняется** — показывается инструкция «Откройте Melogold → Добавить устройство → Сканировать».
 
@@ -1468,6 +1545,17 @@ CREATE TABLE sync_lyrics_pins (                                                 
   PRIMARY KEY (user_id, video_id)
 );
 CREATE INDEX sync_lyrics_pins_pull ON sync_lyrics_pins (user_id, seq);
+-- ===== 0008_shares_remote ================================================
+CREATE TABLE shares (                                                                       -- §4.11
+  id         ID   NOT NULL PRIMARY KEY CHECK (length(id) = 10),
+  user_id    ID   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TXT  NOT NULL,                                                                 -- playlist
+  name       TXT  NOT NULL,
+  tracks     JSON NOT NULL,                                                                 -- TrackDto[]
+  created_at TS   NOT NULL
+);
+CREATE INDEX shares_user ON shares (user_id, created_at);
+ALTER TABLE playback_state ADD COLUMN volume INT NULL;                                      -- 0..100, пульт §4.9
 -- Kysely сам создаёт kysely_migration и kysely_migration_lock.
 ```
 
@@ -1601,6 +1689,7 @@ type ServerLimits = {
           maxPlayStats: 100000; maxPlayEvents: 60000; playAddPerHour: 2000 };
   history: { retentionDays: number; maxEvents: number; mergeUploadMax: number };   // из env
   playback: { queueMax: 200; maxBodyBytes: 131072 };
+  share: { maxShares: 200; maxTracks: 1000 };
   account: { maxDevices: number | null; newDeviceRestrictHours: number;
              login: { minLength: 3; maxLength: 32; pattern: string }; password: { minLength: 8; maxLength: 128 } };
 };

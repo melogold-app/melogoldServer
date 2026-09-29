@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { HOUR_MS, MINUTE_MS } from "../lib/clock.ts";
+import { HOUR_MS, MINUTE_MS, SECOND_MS } from "../lib/clock.ts";
 import {
   BODY_LIMITS,
   DEFAULT_BEARER_RATE_LIMITS,
@@ -60,8 +60,8 @@ function apiRoutes(): ApiRoute[] {
 describe("route policy vs API §3", () => {
   const routes = apiRoutes();
 
-  test("the table was parsed (42 numbered routes and /docs)", () => {
-    assert.equal(routes.length, 43);
+  test("the table was parsed (49 numbered routes and /docs)", () => {
+    assert.equal(routes.length, 50);
   });
 
   test("every API route is in the policy table with its auth and X-Sync-Protocol", () => {
@@ -88,12 +88,12 @@ describe("route policy vs API §3", () => {
 
 function parseLimits(cell: string): RateLimitRule[] {
   const rules: RateLimitRule[] = [];
-  for (const match of cell.matchAll(/(\d+)(?: открытий)?\/(?:(\d+) )?(мин|ч) (ip|user|device|rt|ps)\b/g)) {
+  for (const match of cell.matchAll(/(\d+)(?: открытий)?\/(?:(\d+) )?(мин|ч|с) (ip|user|device|rt|ps)\b/g)) {
     const [, max = "", count = "1", unit = "", key = ""] = match;
     rules.push({
       key: key as RateLimitRule["key"],
       max: Number(max),
-      windowMs: Number(count) * (unit === "ч" ? HOUR_MS : MINUTE_MS),
+      windowMs: Number(count) * (unit === "ч" ? HOUR_MS : unit === "с" ? SECOND_MS : MINUTE_MS),
     });
   }
   return rules;

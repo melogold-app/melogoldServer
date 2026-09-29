@@ -35,6 +35,8 @@ tags:
     description: Continue playback on another device (API §4.9).
   - name: lyrics
     description: The user's lyrics and the shared ones (API §4.10).
+  - name: shares
+    description: Snapshots of own playlists by link (API §4.11).
 paths:
   /health:
     get:
@@ -872,10 +874,21 @@ paths:
         line; heartbeats are comments. No replay (Last-Event-ID is ignored). The
         server closes the stream at the token's `exp`, after
         session.invalidated, when auth_version grows and on shutdown; at most 4
-        streams per device and 64 per user (API §6).
+        streams per device and 64 per user (API §6). `remote=1`: the device lets
+        the other devices control it and receives playback.command (API §4.9).
 
 
         Rate limit: 30/min per user (API §1.10).
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          in: query
+          name: remote
+          required: false
+          description: "1: receive playback.command (remote control)."
       security:
         - bearerAuth: []
       responses:
@@ -2372,7 +2385,7 @@ paths:
         CAS up to 3 attempts then 503 server_busy (API §4.9, DESIGN §3.12.3).
 
 
-        Rate limit: 30/min per device (API §1.10).
+        Rate limit: 120/min per device (API §1.10).
       requestBody:
         required: true
         content:
@@ -2490,6 +2503,171 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: "`protocol_unsupported` (minProtocol, maxProtocol)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /playback/devices:
+    get:
+      operationId: listRemoteDevices
+      summary: The other devices of the account, for the remote control
+      tags:
+        - playback
+      description: >-
+        online and controllable come from the open SSE streams (remote=1);
+        playing and volume from the current playback state when the device is
+        its author (API §4.9).
+
+
+        Rate limit: 60/min per device (API §1.10).
+      parameters:
+        - schema:
+            type: string
+            pattern: ^-?[0-9]+$
+          in: header
+          name: X-Sync-Protocol
+          required: true
+          description: Sync protocol of the client, within [features.sync.minProtocol,
+            features.sync.protocol] (API §1.2). Missing or not an integer → 400
+            invalid_request; outside → 409 protocol_unsupported.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteDeviceList"
+        "400":
+          description: "`invalid_request` (issues)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`protocol_unsupported` (minProtocol, maxProtocol)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /playback/commands:
+    post:
+      operationId: sendRemoteCommand
+      summary: Send a playback command to another device
+      tags:
+        - playback
+      description: >-
+        Delivered as SSE playback.command to the target's remote=1 streams,
+        never stored; the target reports the result by PUT /playback/state. A
+        repeated commandId within 60 s answers the same (API §4.9).
+
+
+        Rate limit: 10/1 s per device (API §1.10).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoteCommand"
+      parameters:
+        - schema:
+            type: string
+            pattern: ^-?[0-9]+$
+          in: header
+          name: X-Sync-Protocol
+          required: true
+          description: Sync protocol of the client, within [features.sync.minProtocol,
+            features.sync.protocol] (API §1.2). Missing or not an integer → 400
+            invalid_request; outside → 409 protocol_unsupported.
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteCommandResult"
+        "400":
+          description: "`invalid_request` (issues), `invalid_json`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "`device_not_found`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`protocol_unsupported` (minProtocol, maxProtocol),
+            `device_offline`, `remote_control_disabled`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "`payload_too_large`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: "`unsupported_media_type`"
           content:
             application/json:
               schema:
@@ -2757,6 +2935,241 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "415":
           description: "`unsupported_media_type`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /shares:
+    post:
+      operationId: createShare
+      summary: Share a snapshot of an own playlist by link
+      tags:
+        - shares
+      description: >-
+        The snapshot never changes; tracks are cleaned like a playback queue
+        (DESIGN §3.9). At most 200 per user (API §4.11).
+
+
+        Rate limit: 20/hour per user (API §1.10).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShareRequest"
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareCreated"
+        "400":
+          description: "`invalid_request` (issues), `invalid_json`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`share_limit_reached` (maxShares)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "`payload_too_large`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: "`unsupported_media_type`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?), `storage_full` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listShares
+      summary: The caller's snapshots, newest first
+      tags:
+        - shares
+      description: "Rate limit: 120/min per user (API §1.10)."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareList"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /shares/{shareId}:
+    delete:
+      operationId: deleteShare
+      summary: Delete one of the caller's snapshots
+      tags:
+        - shares
+      description: |-
+        The link stops working (API §4.11).
+
+        Rate limit: 120/min per user (API §1.10).
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[0-9A-Za-z]{10}$
+          in: path
+          name: shareId
+          required: true
+          description: 10 base62 characters (API §4.11).
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: "`invalid_request` (issues)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "`unauthorized`, `access_token_invalid`, `access_token_expired`,
+            `session_revoked`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "`share_not_found`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "`rate_limited` (retryAfterSeconds)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: "`internal_error`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "`server_busy` (retryAfterSeconds), `unavailable`
+            (retryAfterSeconds?)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: getShare
+      summary: A snapshot by link (no sign-in)
+      tags:
+        - shares
+      description: |-
+        The owner is not disclosed (API §4.11).
+
+        Rate limit: 60/min per IP (IPv6 by /56) (API §1.10).
+      parameters:
+        - schema:
+            type: string
+            pattern: ^[0-9A-Za-z]{10}$
+          in: path
+          name: shareId
+          required: true
+          description: 10 base62 characters (API §4.11).
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareDto"
+        "400":
+          description: "`invalid_request` (issues)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "`share_not_found`"
           content:
             application/json:
               schema:
@@ -3050,6 +3463,28 @@ components:
           $ref: "#/components/schemas/DeviceInput"
       required:
         - device
+    CreateShareRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - playlist
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Trimmed; blank → «Без названия» / «Untitled» by Accept-Language.
+        tracks:
+          minItems: 1
+          maxItems: 1000
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackInput"
+      required:
+        - kind
+        - name
+        - tracks
     DeleteAccountRequest:
       type: object
       properties:
@@ -3350,6 +3785,11 @@ components:
         floorCursor:
           type: string
           description: Opaque cursor (API §1.6).
+        maxShares:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
       required:
         - statusCode
         - error
@@ -3414,6 +3854,11 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/PlaybackState"
+        shares:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareDto"
+          description: Own snapshots (API §4.11).
       required:
         - format
         - formatVersion
@@ -3424,6 +3869,7 @@ components:
         - library
         - history
         - playback
+        - shares
       description: Streamed; not an atomic snapshot; contains no secrets (no hashes,
         tokens or hwid).
     ExportHistory:
@@ -3890,7 +4336,8 @@ components:
           type: string
           description: "Known values: system.connected, sync.changed, playback.updated,
             devices.updated, session.invalidated, account.updated, link.updated,
-            lyrics.changed. Clients must accept unknown values (API §1.3)."
+            lyrics.changed, playback.command. Clients must accept unknown values
+            (API §1.3)."
         at:
           type: string
           format: date-time
@@ -4438,6 +4885,58 @@ components:
         - videoId
         - totalPlayTimeMs
         - lastPlayedAt
+    PlaybackCommandPayload:
+      type: object
+      properties:
+        commandId:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          description: UUID, lowercase.
+        fromDeviceId:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          description: UUID, lowercase.
+        fromDeviceName:
+          nullable: true
+          type: string
+        action:
+          type: string
+          description: "Known values: play, pause, toggle, next, previous, seek, volume,
+            play_queue, stop. Clients must accept unknown values (API §1.3)."
+        positionMs:
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+        volume:
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+        queue:
+          nullable: true
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackDto"
+        index:
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+      required:
+        - commandId
+        - fromDeviceId
+        - fromDeviceName
+        - action
+        - positionMs
+        - volume
+        - queue
+        - index
+      description: "playback.command: the target device only, streams opened with
+        remote=1 (API §4.9); fields the action has not are null."
     PlaybackHandoff:
       type: object
       properties:
@@ -4541,6 +5040,13 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/PlaybackHandoffInput"
+        volume:
+          description: "0..100: the volume of this device (remote control)."
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 100
+          format: int32
       required:
         - sessionId
         - queueVersion
@@ -4646,6 +5152,13 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/PlaybackHandoff"
+        volume:
+          nullable: true
+          description: "0..100: the volume of the author's device; null when not reported."
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
       required:
         - rev
         - deviceId
@@ -4660,6 +5173,7 @@ components:
         - updatedAt
         - queue
         - handoffFrom
+        - volume
     PlaybackStateResponse:
       type: object
       properties:
@@ -4744,6 +5258,12 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/PlaybackHandoff"
+        volume:
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
       required:
         - rev
         - deviceId
@@ -4759,6 +5279,7 @@ components:
         - at
         - updatedAt
         - handoffFrom
+        - volume
       description: The playback state without the queue (the current track only).
     PlaybackUpdatedPayload:
       type: object
@@ -5024,6 +5545,126 @@ components:
         - login
         - password
         - device
+    RemoteCommand:
+      type: object
+      properties:
+        commandId:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          description: Made by the client; a repeat within 60 s answers the same, not
+            delivered.
+        targetDeviceId:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          description: UUID, lowercase only (API §1.6).
+        action:
+          type: string
+          enum:
+            - play
+            - pause
+            - toggle
+            - next
+            - previous
+            - seek
+            - volume
+            - play_queue
+            - stop
+        positionMs:
+          description: seek.
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+        volume:
+          description: "volume: 0..100."
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 100
+          format: int32
+        queue:
+          description: play_queue.
+          nullable: true
+          minItems: 1
+          maxItems: 200
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackInput"
+        index:
+          description: "play_queue: 0..len−1."
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 199
+          format: int32
+      required:
+        - commandId
+        - targetDeviceId
+        - action
+    RemoteCommandResult:
+      type: object
+      properties:
+        delivered:
+          type: boolean
+          description: "false: the target left at this very moment."
+      required:
+        - delivered
+    RemoteDevice:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          description: UUID, lowercase.
+        name:
+          type: string
+          maxLength: 64
+        platform:
+          type: string
+        online:
+          type: boolean
+          description: The device has an SSE stream open right now.
+        controllable:
+          type: boolean
+          description: At least one of its streams was opened with remote=1.
+        playing:
+          type: object
+          nullable: true
+          description: When this device is the author of the current state.
+          allOf:
+            - $ref: "#/components/schemas/PlaybackSummary"
+        volume:
+          nullable: true
+          description: 0..100, as the device last reported it.
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+      required:
+        - deviceId
+        - name
+        - platform
+        - online
+        - controllable
+        - playing
+        - volume
+    RemoteDeviceList:
+      type: object
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/RemoteDevice"
+          description: The other devices of the account, by name.
+        serverTime:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$
+          description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
+      required:
+        - devices
+        - serverTime
     RenameDeviceRequest:
       type: object
       properties:
@@ -5120,6 +5761,14 @@ components:
           description: Lyrics of the user and shared ones (API §4.10).
           allOf:
             - $ref: "#/components/schemas/FeatureVersion"
+        share:
+          description: Snapshots of own playlists by link (API §4.11).
+          allOf:
+            - $ref: "#/components/schemas/FeatureVersion"
+        remote:
+          description: Remote control of other devices (API §4.9).
+          allOf:
+            - $ref: "#/components/schemas/FeatureVersion"
       description: An absent key means the feature is not supported (API §1.3).
     ServerInfo:
       type: object
@@ -5196,12 +5845,15 @@ components:
           $ref: "#/components/schemas/HistoryLimits"
         playback:
           $ref: "#/components/schemas/PlaybackLimits"
+        share:
+          $ref: "#/components/schemas/ShareLimits"
         account:
           $ref: "#/components/schemas/AccountLimits"
       required:
         - sync
         - history
         - playback
+        - share
         - account
       description: Code constants (API §11); `history` and `account` partly from env.
     ServerLinks:
@@ -5235,6 +5887,84 @@ components:
         - reason
         - forceRelogin
       description: "session.invalidated: addressed, before the streams close."
+    ShareCreated:
+      type: object
+      properties:
+        shareId:
+          type: string
+          pattern: ^[0-9A-Za-z]{10}$
+          description: ShareId.
+        url:
+          type: string
+          description: <PUBLIC_URL or the request's origin>/s/<shareId>.
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$
+          description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
+      required:
+        - shareId
+        - url
+        - createdAt
+    ShareDto:
+      type: object
+      properties:
+        shareId:
+          type: string
+          pattern: ^[0-9A-Za-z]{10}$
+          description: ShareId.
+        kind:
+          type: string
+          description: "Known values: playlist. Clients must accept unknown values (API
+            §1.3)."
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        url:
+          type: string
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackDto"
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$
+          description: UTC, always `YYYY-MM-DDTHH:mm:ss.sssZ` (API §1.5).
+      required:
+        - shareId
+        - kind
+        - name
+        - url
+        - tracks
+        - createdAt
+    ShareLimits:
+      type: object
+      properties:
+        maxShares:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+        maxTracks:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          format: int64
+      required:
+        - maxShares
+        - maxTracks
+    ShareList:
+      type: object
+      properties:
+        shares:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareDto"
+          description: Newest first.
+      required:
+        - shares
     SharedLyrics:
       type: object
       properties:

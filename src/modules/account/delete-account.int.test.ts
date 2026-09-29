@@ -268,6 +268,10 @@ describe("account-purge (DESIGN §4.11)", () => {
         })
         .execute();
       await q
+        .insertInto("shares")
+        .values({ id: "PurgeShare", user_id: userId, kind: "playlist", name: "p", tracks: "[]", created_at: now })
+        .execute();
+      await q
         .insertInto("sync_track_overrides")
         .values({
           user_id: userId,

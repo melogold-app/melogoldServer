@@ -34,13 +34,14 @@ export const OPENAPI_TAGS = Object.freeze([
   { name: "sync", description: "Library and history synchronization (API §4.7, §4.8)." },
   { name: "playback", description: "Continue playback on another device (API §4.9)." },
   { name: "lyrics", description: "The user's lyrics and the shared ones (API §4.10)." },
+  { name: "shares", description: "Snapshots of own playlists by link (API §4.11)." },
 ] as const);
 
 export type OpenapiTag = (typeof OPENAPI_TAGS)[number]["name"];
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-export type SuccessStatus = 200 | 201 | 204;
+export type SuccessStatus = 200 | 201 | 202 | 204;
 
 export const BEARER_SECURITY_SCHEME = "bearerAuth";
 export const EVENT_STREAM = "text/event-stream";
@@ -62,6 +63,8 @@ export type OperationSpec<
   documentedBody?: z.ZodType;
   /** Path parameters (`DeviceIdParams`, `LinkIdParams`). */
   params?: P;
+  /** Query parameters (`GET /auth/me/events?remote=1`); the handler reads `request.query`. */
+  querystring?: z.ZodType;
   /** The 2xx status of API §3. */
   status: S;
   /** Response body of `status` (a registered contract component); none for 204. */
@@ -204,6 +207,7 @@ export function operation<
     ...(spec.body === undefined ? {} : { body: spec.body }),
     ...(spec.documentedBody === undefined ? {} : { documentedBody: spec.documentedBody }),
     ...(spec.params === undefined ? {} : { params: spec.params }),
+    ...(spec.querystring === undefined ? {} : { querystring: spec.querystring }),
     response,
     errorCodes,
   };

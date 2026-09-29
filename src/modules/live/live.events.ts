@@ -12,6 +12,7 @@
  * | `account.updated`     | every device of the user but the author | —                            |
  * | `link.updated`        | the approving device (addressed)       | —                            |
  * | `lyrics.changed`      | every device of the user but the author | 2 s (API §6)                 |
+ * | `playback.command`    | one device, streams with `remote=1`    | —                            |
  *
  * Wire format (API §6): the first frame of a stream is `retry: 5000`, every event is
  * `id: <uuid>\ndata: <LiveEvent JSON>\n\n` **without** an `event:` line, heartbeats are comments. Events are published
@@ -72,6 +73,7 @@ export const LIVE_EVENTS: Readonly<Record<LiveEventType, LiveEventSpec>> = Objec
     audience: "others",
     coalesceMs: SYNC_CHANGED_COALESCE_MS,
   },
+  "playback.command": { payload: LIVE_EVENT_PAYLOADS["playback.command"], audience: "device", coalesceMs: null },
 });
 
 export function isLiveEventType(value: unknown): value is LiveEventType {
