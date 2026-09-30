@@ -48,7 +48,7 @@
 | `Accept-Encoding: gzip` | все | рекомендуется |
 | `User-Agent: melogold-<platform>/<semver>`, `<platform>` — значение `Platform` (§1.6) без `other` | все | обязателен у клиентов, сервер только логирует |
 | `Accept-Language` | все | BCP 47. Влияет только на строки, которые сервер пишет сам (имя плейлиста восстановления, «Без названия»). Сообщения ошибок не локализуются |
-| `X-Sync-Protocol: 1` | `/sync`, `/sync/summary`, `/sync/merge-plan`, `/playback/state` | обязателен. Нет или не целое → `400 invalid_request`. Вне `[minProtocol, protocol]` → `409 protocol_unsupported` |
+| `X-Sync-Protocol: 1` | `/sync`, `/sync/summary`, `/sync/merge-plan`, `/playback/state`, `/playback/devices`, `/playback/commands` | обязателен. Нет или не целое → `400 invalid_request`. Вне `[minProtocol, protocol]` → `409 protocol_unsupported` |
 | `X-Request-Id` | необязательный | `^[A-Za-z0-9._-]{8,64}$`, иначе генерируется свой |
 
 Заголовков `X-HWID` и `X-Device-*` нет. Устройство определяется claim `did` в токене, метаданные приходят блоком `device` в теле.

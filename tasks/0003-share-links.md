@@ -45,9 +45,12 @@ type ShareList = { shares: ShareDto[] };
 - DDL: `shares(id, user_id, kind, name, payload JSON, created_at)`, индекс `(user_id, created_at)`; удаление аккаунта
   удаляет снимки; экспорт (§4.5) — `shares`.
 
-**Не на сервере:** ссылки Spotify, Apple Music, Яндекс Музыки, Deezer клиенты переводят в YouTube сами через song.link
-(Odesli: `https://api.song.link/v1-alpha.1/links?url=…` → `linksByPlatform.youtube/youtubeMusic`); сервер к ним не
-ходит.
+**Не на сервере:** ссылки Spotify, Apple Music, Яндекс Музыки, Deezer клиенты переводят в YouTube сами; сервер к ним не
+ходит. **Уточнение 2026-09-30:** song.link (Odesli, `https://api.song.link/v1-alpha.1/links?url=…`) без ключа теперь
+отвечает `401 PUBLIC_API_ACCESS_DEPRECATED`, поэтому главный путь без ключа — прочитать начало страницы самой ссылки,
+взять название и исполнителя из `<title>` / `og:title` / `og:description` и искать на YouTube Music (образцы: Android
+`providers/songlink/PageTitles.kt`, Apple `MelogoldInnerTube/ExternalLinks.swift`). song.link — только если в сборке
+задан ключ.
 
 ## 3. Проверка
 
