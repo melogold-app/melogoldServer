@@ -51,9 +51,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@redocly/cli": "2.54.2",
+    "@redocly/cli": "2.54.3",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^24.13.6",
+    "@types/node": "^24.19.0",
     "@types/pg": "^8.23.1",
     "eslint": "^10.11.0",
     "globals": "^17.12.0",
