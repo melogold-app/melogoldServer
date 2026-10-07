@@ -222,12 +222,19 @@ describe("POST /playback/commands", () => {
         { videoId: "a1B2c3D4e5F", title: "Song" },
       ];
       assert.equal((await command(s.phone.token, { ...to, action: "play_queue", queue, index: 1 })).statusCode, 202);
+      // Перенос «как AirPlay»: очередь с секундой, на которой играла (задание 0005).
+      assert.equal(
+        (await command(s.phone.token, { ...to, action: "play_queue", queue, index: 0, positionMs: 83_000 })).statusCode,
+        202,
+      );
 
-      const [seek, volume, playQueue] = target.commands().map((event) => event.payload);
+      const [seek, volume, playQueue, handoff] = target.commands().map((event) => event.payload);
       assert.deepEqual([seek?.action, seek?.positionMs, seek?.volume], ["seek", 61_000, null]);
       assert.deepEqual([volume?.action, volume?.volume, volume?.positionMs], ["volume", 0, null]);
       assert.equal(playQueue?.action, "play_queue");
       assert.equal(playQueue.index, 1);
+      assert.equal(playQueue.positionMs, null, "без позиции — с начала, как раньше");
+      assert.deepEqual([handoff?.action, handoff?.index, handoff?.positionMs], ["play_queue", 0, 83_000]);
       const cleaned = playQueue.queue as Record<string, unknown>[];
       assert.deepEqual(
         cleaned.map((track) => [track.videoId, track.title, track.artistsText, track.thumbnailUrl]),

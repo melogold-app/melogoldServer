@@ -35,7 +35,7 @@ export const RemoteCommand = z
     commandId: Uuid.meta({ description: "Made by the client; a repeat within 60 s answers the same, not delivered." }),
     targetDeviceId: Uuid,
     action: z.enum(REMOTE_ACTION_VALUES),
-    positionMs: optional(int(0)).meta({ description: "seek." }),
+    positionMs: optional(int(0)).meta({ description: "seek; play_queue: start position in the track at index." }),
     volume: optional(int(0, VOLUME_MAX)).meta({ description: "volume: 0..100." }),
     queue: optional(z.array(TrackInput).min(1).max(PLAYBACK_LIMITS.queueMax)).meta({ description: "play_queue." }),
     index: optional(int(0, PLAYBACK_LIMITS.queueMax - 1)).meta({ description: "play_queue: 0..len−1." }),

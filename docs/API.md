@@ -924,7 +924,7 @@ type RemoteCommand = {
   commandId: Uuid;                       // делает клиент; повтор того же id в течение 60 с — тот же ответ, без доставки
   targetDeviceId: Uuid;
   action: string;                        // play|pause|toggle|next|previous|seek|volume|play_queue|stop
-  positionMs?: number;                   // seek: 0..2^53−1
+  positionMs?: number;                   // seek: 0..2^53−1; play_queue: с какой секунды начать трек index (перенос)
   volume?: number;                       // volume: 0..100
   queue?: TrackInput[];                  // play_queue: 1..200
   index?: number;                        // play_queue: начальный индекс, 0..len−1
@@ -1101,7 +1101,7 @@ type LiveEvent = { id: Uuid; type: string; at: Iso; payload: object | null };
 | `account.updated` | все, кроме автора | `AccountUpdatedPayload {reason, byDevice: {id, name}}`; reason: `password_changed\|password_changed_without_old\|recovery_code_rotated` | действия безопасности |
 | `link.updated` | устройство-одобряющее | `LinkUpdatedPayload {linkId, status}`; status: `claimed\|cancelled\|completed` | действие другой стороны |
 | `lyrics.changed` | все, кроме автора | `LyricsChangedPayload {videoId, rev}` | после commit `PUT` и `DELETE /lyrics/{videoId}`, которые что-то изменили; склейка 2 с |
-| `playback.command` | устройство-цель, потоки с `remote=1` | `PlaybackCommandPayload {commandId, fromDeviceId, fromDeviceName: string \| null, action, positionMs: number \| null, volume: number \| null, queue: TrackDto[] \| null, index: number \| null}` | `POST /playback/commands`; поля действия, которых у команды нет, — `null` |
+| `playback.command` | устройство-цель, потоки с `remote=1` | `PlaybackCommandPayload {commandId, fromDeviceId, fromDeviceName: string \| null, action, positionMs: number \| null, volume: number \| null, queue: TrackDto[] \| null, index: number \| null}` | `POST /playback/commands`; поля действия, которых у команды нет, — `null`; `positionMs` у `play_queue` — с какой секунды начать трек `index` (перенос, задание 0005) |
 
 ```ts
 type PlaybackSummary = {

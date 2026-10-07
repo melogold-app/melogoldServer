@@ -95,7 +95,8 @@ export async function sendRemoteCommand(
       fromDeviceId: auth.deviceId,
       fromDeviceName,
       action: command.action,
-      positionMs: command.action === "seek" ? (command.positionMs ?? null) : null,
+      // play_queue: с какой секунды начать трек `index` — перенос воспроизведения «как AirPlay» (задание 0005).
+      positionMs: command.action === "seek" || command.action === "play_queue" ? (command.positionMs ?? null) : null,
       volume: command.action === "volume" ? (command.volume ?? null) : null,
       queue: command.action === "play_queue" ? (command.queue ?? []).map((item) => cleanTrackInput(item)) : null,
       index: command.action === "play_queue" ? (command.index ?? null) : null,
