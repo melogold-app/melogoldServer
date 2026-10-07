@@ -7792,7 +7792,7 @@
             ]
           },
           "positionMs": {
-            "description": "seek.",
+            "description": "seek; play_queue: start position in the track at index.",
             "nullable": true,
             "type": "integer",
             "minimum": 0,
