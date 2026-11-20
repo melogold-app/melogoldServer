@@ -167,5 +167,13 @@ jobs:
         run: docker build --build-arg APP_VERSION=0.0.0-e2e --build-arg GIT_SHA="$GITHUB_SHA" --tag "$IMAGE" .
       - name: Build the installer
         run: deploy/installer/build.sh 0.0.0-e2e dist
+      - name: Read terminal answers while the installer is piped to sh
+        run: |
+          sed '$d' dist/install.sh > "$RUNNER_TEMP/installer-terminal.sh"
+          cat >> "$RUNNER_TEMP/installer-terminal.sh" <<'EOF'
+          if ! interactive; then exit 3; fi
+          if [ "$(prompt 'Choice' '2')" != "1" ]; then exit 4; fi
+          EOF
+          printf '1\n' | timeout 10 script -qec "cat '$RUNNER_TEMP/installer-terminal.sh' | sh" /dev/null
       - name: install.sh --lan and the host command end to end (PLAN T3.3)
         run: sudo scripts/e2e-installer.sh "$IMAGE" dist/install.sh "${{ matrix.db }}"

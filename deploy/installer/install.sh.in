@@ -15,6 +15,13 @@ INSTALLER_VERSION="@VERSION@"
 
 # @LIB@
 
+# A piped installer reads the script from stdin and answers from the terminal.
+INSTALLER_TTY=0
+if [ ! -t 0 ] && [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
+	exec 3</dev/tty
+	INSTALLER_TTY=1
+fi
+
 # --- messages (--lang ru|en, default from LANG) ----------------------------------------------------------------------
 
 UI_LANG=en
@@ -120,7 +127,7 @@ prompt() {
 		return
 	fi
 	printf '%s [%s]: ' "$1" "$prompt_default" >&2
-	read -r prompt_answer || prompt_answer=""
+	read_answer prompt_answer || prompt_answer=""
 	printf '%s\n' "${prompt_answer:-$prompt_default}"
 }
 
@@ -232,7 +239,7 @@ choose_mode() {
 		m "  1) By a domain name with HTTPS (a server on the internet; ports 80 and 443)" "  1) По доменному имени с HTTPS (сервер в интернете; порты 80 и 443)"
 		m "  2) In my home network only (http, by IP address)" "  2) Только в домашней сети (http, по IP-адресу)"
 		m "  3) Behind my own reverse proxy on this machine" "  3) За моим обратным прокси на этой машине"
-		case $(prompt "$(m 'Choice' 'Выбор')" 1) in
+		case $(prompt "$(m 'Choice' 'Выбор')" 2) in
 			2) OPT_MODE=lan ;;
 			3) OPT_MODE=proxy ;;
 			*) OPT_MODE=domain ;;
@@ -476,7 +483,13 @@ create_owner() {
 		OWNER_CODE=$(printf '%s\n' "$owner_out" | sed -n 's/^recovery code: //p')
 	else
 		m "Choose the password of $OPT_ADMIN_LOGIN (at least 10 characters)." "Придумайте пароль для $OPT_ADMIN_LOGIN (не короче 10 символов)."
-		compose exec app melogold user add "$OPT_ADMIN_LOGIN" || md "creating the account failed" "не удалось создать аккаунт"
+		if [ "$INSTALLER_TTY" = 1 ]; then
+			compose exec app melogold user add "$OPT_ADMIN_LOGIN" <&3 ||
+				md "creating the account failed" "не удалось создать аккаунт"
+		else
+			compose exec app melogold user add "$OPT_ADMIN_LOGIN" ||
+				md "creating the account failed" "не удалось создать аккаунт"
+		fi
 	fi
 }
 
@@ -579,7 +592,7 @@ summary() {
 	if [ "$OPT_NO_QR" != 1 ]; then
 		say ""
 		compose exec -T app melogold qr --color || true
-		m "In the app: Settings → Sync → Own server → Scan QR" "В приложении: Настройки → Синхронизация → Свой сервер → Сканировать QR"
+		m "In the app, open Settings → Melogold server and enter the address above. On mobile, you can also scan the QR code." +			"В приложении откройте «Настройки → Сервер Melogold» и введите адрес выше. На телефоне можно отсканировать QR-код."
 	fi
 }
 

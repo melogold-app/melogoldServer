@@ -13,25 +13,26 @@
 ## Установка одной командой
 
 ```sh
-curl -fsSL https://github.com/melogold-app/melogoldServer/releases/latest/download/install.sh | sudo sh
+curl -fsSL https://github.com/melogold-app/melogoldServer/releases/latest/download/install.sh | sudo sh -s -- --lang ru
 ```
 
-Установщик спросит, как клиенты будут подключаться, и логин владельца. То же без вопросов:
+Установщик читает ответы с терминала. Если сервер нужен дома, выберите вариант «Только в домашней сети». Укажите логин и пароль владельца. SQLite используется по умолчанию.
+
+Чтобы задать параметры одной командой:
 
 ```sh
 # сервер в интернете с HTTPS
-curl -fsSL …/install.sh | sudo sh -s -- --domain music.example.com --admin-login maxim --yes
+curl -fsSL https://github.com/melogold-app/melogoldServer/releases/latest/download/install.sh | sudo sh -s -- --domain music.example.com --admin-login maxim --yes
 # только домашняя сеть, http по IP
-curl -fsSL …/install.sh | sh -s -- --lan --admin-login maxim --yes
+curl -fsSL https://github.com/melogold-app/melogoldServer/releases/latest/download/install.sh | sh -s -- --lan --admin-login maxim --yes
 # за вашим обратным прокси на той же машине
-curl -fsSL …/install.sh | sh -s -- --proxy --public-url https://m.example.com --port 8080 --yes
+curl -fsSL https://github.com/melogold-app/melogoldServer/releases/latest/download/install.sh | sh -s -- --proxy --public-url https://m.example.com --port 8080 --yes
 ```
 
 С `--yes` пароль владельца генерируется и печатается в итоге вместе с **кодом восстановления**. Код показывается
 один раз: сохраните его. Им можно сбросить пароль из любого клиента.
 
-В конце установщик показывает QR-код адреса сервера. В приложении: «Настройки → Синхронизация → Свой сервер →
-Сканировать QR».
+В конце установщик выводит адрес сервера. На каждом устройстве откройте «Настройки → Сервер Melogold», введите этот адрес и войдите с логином и паролем владельца. На телефоне можно открыть QR-код камерой.
 
 ### Режимы
 

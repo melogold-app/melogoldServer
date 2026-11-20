@@ -16,7 +16,15 @@ die() {
 }
 
 # Whether stdin and stdout are a terminal (questions, colors, `docker compose exec` with a TTY).
-interactive() { [ -t 0 ] && [ -t 1 ]; }
+interactive() { [ -t 1 ] && { [ -t 0 ] || [ "${INSTALLER_TTY:-0}" = 1 ]; }; }
+
+read_answer() {
+	if [ "${INSTALLER_TTY:-0}" = 1 ]; then
+		read -r "$1" <&3
+	else
+		read -r "$1"
+	fi
+}
 
 # ask "Question" default(y|n): yes → 0. Without a terminal the default answers.
 ask() {
@@ -27,7 +35,7 @@ ask() {
 	fi
 	if [ "$ask_default" = y ]; then ask_hint="[Y/n]"; else ask_hint="[y/N]"; fi
 	printf '%s %s ' "$1" "$ask_hint"
-	read -r ask_answer || ask_answer=""
+	read_answer ask_answer || ask_answer=""
 	case $ask_answer in
 		[yYдД]*) return 0 ;;
 		[nNнН]*) return 1 ;;
