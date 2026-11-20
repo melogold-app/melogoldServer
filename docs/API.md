@@ -24,7 +24,7 @@
 ## 1. Соглашения
 
 ### 1.1 Base URL, версии, OpenAPI
-- **Base URL** = `scheme://host[:port][/prefix]`, без `/` в конце. Официальный сервер: `https://api.melogold.app`. Клиент только склеивает base и путь.
+- **Base URL** = `scheme://host[:port][/prefix]`, без `/` в конце. Адрес задаёт владелец экземпляра. Клиент только склеивает base и путь.
 - **Версии в URL нет.** Совместимость определяют:
   - для HTTP API — `apiVersion`/`minApiVersion` из `/server/info` (сейчас 1/1);
   - для синхронизации и playback — `features.sync.protocol`/`minProtocol` (1/1) плюс заголовок `X-Sync-Protocol`.
@@ -1150,7 +1150,7 @@ data: {"id":"1f2e3d4c-5b6a-4978-8a7b-6c5d4e3f2a1b","type":"account.updated","at"
    - протокол синхронизации: `minProtocol ≤ P ≤ protocol`;
    - `P < minProtocol` → обновить клиент, `P > protocol` → «обновите сервер».
 5. **Показать** `instanceName`, host, `version`, `registration`, `secureTransport`.
-   - Значок «Официальный» — только если origin == `https://api.melogold.app` **и** `serverId == OFFICIAL_SERVER_ID` (константа сборки).
+   - Показывайте хост выбранного экземпляра. Предустановленного сервера нет.
    - Иначе показать «Сторонний сервер — его владелец видит вашу библиотеку».
 6. **`binding = serverId + ":" + userId`.** Тот же `serverId` по другому адресу меняет только base URL. Если `publicUrl ≠ base` и он https, предложить переключиться.
 7. **Повторная проверка** — при входе, раз в сутки и после `409 protocol_unsupported`.
@@ -1646,7 +1646,7 @@ lockUser(q, userId):   // первый оператор каждой сериа�
 | `REFRESH_TOKEN_TTL_DAYS` | `90` | 7..365, скользящий |
 | `REFRESH_GRACE_SECONDS` | `86400` | 60..604800 |
 | `RESTORE_REFRESH_GRACE_DAYS` | `3` | 0..14, действует после restore (DESIGN §3.15) |
-| `REGISTRATION` | `first` | `open\|closed\|first`. Официальный сервер: `open` |
+| `REGISTRATION` | `first` | `open\|closed\|first`. Режим выбирает владелец экземпляра |
 | `REGISTRATION_POW_BITS` | `0` | 0..26; 0 = выключено. Официальный: `18` |
 | `REGISTRATION_POW_SOFT_PER_HOUR` | `60` | порог адаптивной сложности |
 | `RESERVED_LOGINS` | пусто | через запятую |

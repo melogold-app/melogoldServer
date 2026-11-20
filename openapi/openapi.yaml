@@ -13,9 +13,8 @@ info:
     name: CC0-1.0
     url: https://creativecommons.org/publicdomain/zero/1.0/
 servers:
-  - url: https://api.melogold.app
-    description: The official server. Self-hosted servers serve the same API under
-      their own base URL.
+  - url: /
+    description: Set the base URL to your own Melogold server.
 tags:
   - name: server
     description: Health and discovery (API §4.2).

@@ -243,8 +243,8 @@ export function openapiBase(): Record<string, unknown> {
     },
     servers: [
       {
-        url: "https://api.melogold.app",
-        description: "The official server. Self-hosted servers serve the same API under their own base URL.",
+        url: "/",
+        description: "Set the base URL to your own Melogold server.",
       },
     ],
     tags: OPENAPI_TAGS.map((tag) => ({ ...tag })),
