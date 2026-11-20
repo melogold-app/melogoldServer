@@ -9,7 +9,7 @@ import { captureOutput } from "../test/cli-output.ts";
 import { EXIT_USAGE, runCli } from "./index.ts";
 import { QR_QUIET_ZONE, qrLines, qrMatrix } from "./qr.ts";
 
-const URL_TEXT = "https://178-250-187-202.sslip.io";
+const URL_TEXT = "https://192-0-2-1.sslip.io";
 
 /** The 7×7 finder pattern: a dark ring, a light ring, a dark 3×3 centre. */
 function hasFinderAt(rows: boolean[][], top: number, left: number): boolean {
