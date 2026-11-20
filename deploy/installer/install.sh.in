@@ -17,7 +17,7 @@ INSTALLER_VERSION="@VERSION@"
 
 # A piped installer reads the script from stdin and answers from the terminal.
 INSTALLER_TTY=0
-if [ ! -t 0 ] && [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
+if [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
 	exec 3</dev/tty
 	INSTALLER_TTY=1
 fi

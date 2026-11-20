@@ -16,7 +16,7 @@ die() {
 }
 
 # Whether stdin and stdout are a terminal (questions, colors, `docker compose exec` with a TTY).
-interactive() { [ -t 1 ] && { [ -t 0 ] || [ "${INSTALLER_TTY:-0}" = 1 ]; }; }
+interactive() { [ "${INSTALLER_TTY:-0}" = 1 ] || { [ -t 0 ] && [ -t 1 ]; }; }
 
 read_answer() {
 	if [ "${INSTALLER_TTY:-0}" = 1 ]; then
